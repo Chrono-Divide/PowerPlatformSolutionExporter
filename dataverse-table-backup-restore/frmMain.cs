@@ -8,10 +8,13 @@ public partial class frmMain : Form
 {
     private readonly DataverseService _dataverseService = new();
     private readonly PacCliService _pacCliService = new();
+    private readonly ConnectionProfileStore _connectionProfileStore = new();
     private readonly SnapshotPackageService _snapshotPackageService;
     private readonly BindingList<TableGridRow> _tableRows = [];
+    private IReadOnlyList<ConnectionProfile> _connectionProfiles = [];
     private CancellationTokenSource? _operationCancellation;
     private bool _busy;
+    private bool _loadingConnectionProfiles;
 
     public frmMain()
     {
@@ -28,6 +31,7 @@ public partial class frmMain : Form
         chkRestoreData.Checked = true;
         chkSafetySnapshot.Checked = true;
         chkDeleteExtraRecords.Checked = false;
+        LoadConnectionProfiles();
         UpdateActionState();
     }
 
@@ -36,14 +40,156 @@ public partial class frmMain : Form
         await RunOperationAsync("Connect", async cancellationToken =>
         {
             SetConnectionStatus("Connecting...", Color.DarkOrange);
-            await _dataverseService.ConnectAsync(txtEnvironmentUrl.Text.Trim(), txtUserName.Text.Trim(), cancellationToken);
-            txtEnvironmentUrl.Text = _dataverseService.ConnectedEnvironmentUrl;
+            var userName = cboUserName.Text.Trim();
+            await _dataverseService.ConnectAsync(cboEnvironmentUrl.Text.Trim(), userName, cancellationToken);
+            cboEnvironmentUrl.Text = _dataverseService.ConnectedEnvironmentUrl;
             SetConnectionStatus($"Connected: {_dataverseService.ConnectedEnvironmentName}", Color.SeaGreen);
+            TrySaveConnectionProfile(cboEnvironmentUrl.Text, userName);
             await LoadTablesAsync(forceRefresh: true, cancellationToken);
         });
         if (!_dataverseService.IsConnected)
         {
             SetConnectionStatus("Connection failed", Color.Firebrick);
+        }
+    }
+
+    private void btnSaveConnectionProfile_Click(object sender, EventArgs e)
+    {
+        try
+        {
+            var profile = _connectionProfileStore.Save(cboEnvironmentUrl.Text, cboUserName.Text);
+            LoadConnectionProfiles(profile.EnvironmentUrl, profile.UserName);
+            MessageBox.Show(
+                this,
+                "Connection profile saved. Only the environment URL and user name are stored; no password or access token is written to the profile.",
+                "Profile Saved",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        }
+        catch (Exception exception)
+        {
+            ShowError("Unable to save connection profile", exception);
+        }
+    }
+
+    private void btnRemoveConnectionProfile_Click(object sender, EventArgs e)
+    {
+        ConnectionProfile? profile;
+        try
+        {
+            var normalizedUrl = ConnectionProfileStore.NormalizeEnvironmentUrl(cboEnvironmentUrl.Text);
+            profile = _connectionProfiles.FirstOrDefault(item =>
+                string.Equals(item.EnvironmentUrl, normalizedUrl, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(item.UserName, cboUserName.Text.Trim(), StringComparison.OrdinalIgnoreCase));
+        }
+        catch (Exception exception)
+        {
+            ShowError("Unable to remove connection profile", exception);
+            return;
+        }
+
+        if (profile is null)
+        {
+            MessageBox.Show(this, "The current URL and user name are not a saved profile.", "Profile Not Found", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var confirmation = MessageBox.Show(
+            this,
+            $"Remove this saved connection profile?\n\n{profile.EnvironmentUrl}\n{profile.UserName}",
+            "Remove Profile",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Question,
+            MessageBoxDefaultButton.Button2);
+        if (confirmation != DialogResult.Yes)
+        {
+            return;
+        }
+
+        try
+        {
+            _connectionProfileStore.Remove(profile.EnvironmentUrl, profile.UserName);
+            LoadConnectionProfiles();
+        }
+        catch (Exception exception)
+        {
+            ShowError("Unable to remove connection profile", exception);
+        }
+    }
+
+    private void cboEnvironmentUrl_SelectedIndexChanged(object sender, EventArgs e)
+    {
+        if (_loadingConnectionProfiles)
+        {
+            return;
+        }
+
+        var preferredUserName = _connectionProfiles
+            .FirstOrDefault(profile => string.Equals(
+                profile.EnvironmentUrl,
+                cboEnvironmentUrl.Text,
+                StringComparison.OrdinalIgnoreCase))
+            ?.UserName;
+        PopulateUserNames(cboEnvironmentUrl.Text, preferredUserName);
+    }
+
+    private void LoadConnectionProfiles(string? preferredEnvironmentUrl = null, string? preferredUserName = null)
+    {
+        _loadingConnectionProfiles = true;
+        try
+        {
+            _connectionProfiles = _connectionProfileStore.Load();
+            var preferredProfile = _connectionProfiles.FirstOrDefault(profile =>
+                                       string.Equals(profile.EnvironmentUrl, preferredEnvironmentUrl, StringComparison.OrdinalIgnoreCase) &&
+                                       string.Equals(profile.UserName, preferredUserName, StringComparison.OrdinalIgnoreCase))
+                                   ?? _connectionProfiles.FirstOrDefault();
+
+            cboEnvironmentUrl.BeginUpdate();
+            cboEnvironmentUrl.Items.Clear();
+            cboEnvironmentUrl.Items.AddRange(_connectionProfiles
+                .Select(profile => profile.EnvironmentUrl)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Cast<object>()
+                .ToArray());
+            cboEnvironmentUrl.EndUpdate();
+            cboEnvironmentUrl.Text = preferredProfile?.EnvironmentUrl ?? preferredEnvironmentUrl ?? string.Empty;
+            PopulateUserNames(cboEnvironmentUrl.Text, preferredProfile?.UserName ?? preferredUserName);
+        }
+        finally
+        {
+            _loadingConnectionProfiles = false;
+            btnRemoveConnectionProfile.Enabled = !_busy && _connectionProfiles.Count > 0;
+        }
+    }
+
+    private void PopulateUserNames(string environmentUrl, string? preferredUserName = null)
+    {
+        var existingText = preferredUserName ?? cboUserName.Text;
+        var userNames = _connectionProfiles
+            .Where(profile => string.Equals(profile.EnvironmentUrl, environmentUrl, StringComparison.OrdinalIgnoreCase))
+            .Select(profile => profile.UserName)
+            .Where(userName => !string.IsNullOrWhiteSpace(userName))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Cast<object>()
+            .ToArray();
+
+        cboUserName.BeginUpdate();
+        cboUserName.Items.Clear();
+        cboUserName.Items.AddRange(userNames);
+        cboUserName.EndUpdate();
+        cboUserName.Text = existingText;
+    }
+
+    private void TrySaveConnectionProfile(string environmentUrl, string userName)
+    {
+        try
+        {
+            var profile = _connectionProfileStore.Save(environmentUrl, userName);
+            LoadConnectionProfiles(profile.EnvironmentUrl, profile.UserName);
+        }
+        catch (Exception exception)
+        {
+            AppendLog($"[{DateTime.Now:HH:mm:ss}] WARNING: Connected, but the profile could not be saved: {exception.Message}");
         }
     }
 
@@ -183,7 +329,7 @@ public partial class frmMain : Form
             this,
             $"Restore snapshot from {manifest.CreatedUtc.ToLocalTime():yyyy-MM-dd HH:mm:ss}?\n" +
             $"Tables: {manifest.Tables.Count:N0}\n" +
-            $"Target: {txtEnvironmentUrl.Text.Trim()}" + strictWarning,
+            $"Target: {cboEnvironmentUrl.Text.Trim()}" + strictWarning,
             "Confirm Restore",
             MessageBoxButtons.YesNo,
             chkDeleteExtraRecords.Checked ? MessageBoxIcon.Warning : MessageBoxIcon.Question,
@@ -222,7 +368,7 @@ public partial class frmMain : Form
             var (_, summary) = await _snapshotPackageService.RestoreSnapshotAsync(
                 new RestoreOptions
                 {
-                    EnvironmentUrl = txtEnvironmentUrl.Text.Trim(),
+                    EnvironmentUrl = cboEnvironmentUrl.Text.Trim(),
                     SnapshotFile = snapshotFile,
                     RestoreStructure = restoreStructure,
                     RestoreData = restoreData,
@@ -320,7 +466,7 @@ public partial class frmMain : Form
     {
         return new SnapshotCreateOptions
         {
-            EnvironmentUrl = txtEnvironmentUrl.Text.Trim(),
+            EnvironmentUrl = cboEnvironmentUrl.Text.Trim(),
             OutputFolder = txtSnapshotFolder.Text.Trim(),
             Scope = cboTableScope.SelectedIndex == 0 ? "Custom tables" : "All tables",
             Content = content ?? (includeData ? "Structure and data" : "Structure only"),
@@ -429,7 +575,11 @@ public partial class frmMain : Form
         progressOperation.Style = busy ? ProgressBarStyle.Marquee : ProgressBarStyle.Blocks;
         progressOperation.MarqueeAnimationSpeed = busy ? 30 : 0;
         btnCancelOperation.Enabled = busy;
+        cboEnvironmentUrl.Enabled = !busy;
+        cboUserName.Enabled = !busy;
         btnConnect.Enabled = !busy;
+        btnSaveConnectionProfile.Enabled = !busy;
+        btnRemoveConnectionProfile.Enabled = !busy && _connectionProfiles.Count > 0;
         btnRefreshTables.Enabled = !busy && _dataverseService.IsConnected;
         cboTableScope.Enabled = !busy && _dataverseService.IsConnected;
         dgvTables.Enabled = !busy && _dataverseService.IsConnected;

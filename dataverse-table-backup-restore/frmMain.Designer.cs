@@ -8,10 +8,12 @@ partial class frmMain
     private Label lblSubtitle;
     private GroupBox grpConnection;
     private Label lblEnvironmentUrl;
-    private TextBox txtEnvironmentUrl;
+    private ComboBox cboEnvironmentUrl;
     private Label lblUserName;
-    private TextBox txtUserName;
+    private ComboBox cboUserName;
     private Button btnConnect;
+    private Button btnSaveConnectionProfile;
+    private Button btnRemoveConnectionProfile;
     private Label lblConnectionStatus;
     private SplitContainer splitMain;
     private GroupBox grpTables;
@@ -75,10 +77,12 @@ partial class frmMain
         lblSubtitle = new Label();
         grpConnection = new GroupBox();
         lblEnvironmentUrl = new Label();
-        txtEnvironmentUrl = new TextBox();
+        cboEnvironmentUrl = new ComboBox();
         lblUserName = new Label();
-        txtUserName = new TextBox();
+        cboUserName = new ComboBox();
         btnConnect = new Button();
+        btnSaveConnectionProfile = new Button();
+        btnRemoveConnectionProfile = new Button();
         lblConnectionStatus = new Label();
         splitMain = new SplitContainer();
         grpTables = new GroupBox();
@@ -177,10 +181,12 @@ partial class frmMain
         // grpConnection
         //
         grpConnection.Controls.Add(lblEnvironmentUrl);
-        grpConnection.Controls.Add(txtEnvironmentUrl);
+        grpConnection.Controls.Add(cboEnvironmentUrl);
         grpConnection.Controls.Add(lblUserName);
-        grpConnection.Controls.Add(txtUserName);
+        grpConnection.Controls.Add(cboUserName);
         grpConnection.Controls.Add(btnConnect);
+        grpConnection.Controls.Add(btnSaveConnectionProfile);
+        grpConnection.Controls.Add(btnRemoveConnectionProfile);
         grpConnection.Controls.Add(lblConnectionStatus);
         grpConnection.Dock = DockStyle.Top;
         grpConnection.Location = new Point(10, 80);
@@ -200,13 +206,16 @@ partial class frmMain
         lblEnvironmentUrl.TabIndex = 0;
         lblEnvironmentUrl.Text = "Environment URL";
         //
-        // txtEnvironmentUrl
+        // cboEnvironmentUrl
         //
-        txtEnvironmentUrl.Location = new Point(122, 24);
-        txtEnvironmentUrl.Name = "txtEnvironmentUrl";
-        txtEnvironmentUrl.PlaceholderText = "https://yourorg.crm.dynamics.com";
-        txtEnvironmentUrl.Size = new Size(355, 23);
-        txtEnvironmentUrl.TabIndex = 1;
+        cboEnvironmentUrl.AutoCompleteMode = AutoCompleteMode.SuggestAppend;
+        cboEnvironmentUrl.AutoCompleteSource = AutoCompleteSource.ListItems;
+        cboEnvironmentUrl.FormattingEnabled = true;
+        cboEnvironmentUrl.Location = new Point(122, 24);
+        cboEnvironmentUrl.Name = "cboEnvironmentUrl";
+        cboEnvironmentUrl.Size = new Size(355, 23);
+        cboEnvironmentUrl.TabIndex = 1;
+        cboEnvironmentUrl.SelectedIndexChanged += cboEnvironmentUrl_SelectedIndexChanged;
         //
         // lblUserName
         //
@@ -217,13 +226,15 @@ partial class frmMain
         lblUserName.TabIndex = 2;
         lblUserName.Text = "User name";
         //
-        // txtUserName
+        // cboUserName
         //
-        txtUserName.Location = new Point(567, 24);
-        txtUserName.Name = "txtUserName";
-        txtUserName.PlaceholderText = "name@company.com (optional)";
-        txtUserName.Size = new Size(250, 23);
-        txtUserName.TabIndex = 3;
+        cboUserName.AutoCompleteMode = AutoCompleteMode.SuggestAppend;
+        cboUserName.AutoCompleteSource = AutoCompleteSource.ListItems;
+        cboUserName.FormattingEnabled = true;
+        cboUserName.Location = new Point(567, 24);
+        cboUserName.Name = "cboUserName";
+        cboUserName.Size = new Size(250, 23);
+        cboUserName.TabIndex = 3;
         //
         // btnConnect
         //
@@ -239,6 +250,26 @@ partial class frmMain
         btnConnect.UseVisualStyleBackColor = false;
         btnConnect.Click += btnConnect_Click;
         //
+        // btnSaveConnectionProfile
+        //
+        btnSaveConnectionProfile.Location = new Point(955, 22);
+        btnSaveConnectionProfile.Name = "btnSaveConnectionProfile";
+        btnSaveConnectionProfile.Size = new Size(100, 28);
+        btnSaveConnectionProfile.TabIndex = 5;
+        btnSaveConnectionProfile.Text = "Save profile";
+        btnSaveConnectionProfile.UseVisualStyleBackColor = true;
+        btnSaveConnectionProfile.Click += btnSaveConnectionProfile_Click;
+        //
+        // btnRemoveConnectionProfile
+        //
+        btnRemoveConnectionProfile.Location = new Point(1065, 22);
+        btnRemoveConnectionProfile.Name = "btnRemoveConnectionProfile";
+        btnRemoveConnectionProfile.Size = new Size(100, 28);
+        btnRemoveConnectionProfile.TabIndex = 6;
+        btnRemoveConnectionProfile.Text = "Remove";
+        btnRemoveConnectionProfile.UseVisualStyleBackColor = true;
+        btnRemoveConnectionProfile.Click += btnRemoveConnectionProfile_Click;
+        //
         // lblConnectionStatus
         //
         lblConnectionStatus.AutoSize = true;
@@ -246,7 +277,7 @@ partial class frmMain
         lblConnectionStatus.Location = new Point(18, 59);
         lblConnectionStatus.Name = "lblConnectionStatus";
         lblConnectionStatus.Size = new Size(90, 15);
-        lblConnectionStatus.TabIndex = 5;
+        lblConnectionStatus.TabIndex = 7;
         lblConnectionStatus.Text = "Not connected";
         //
         // splitMain

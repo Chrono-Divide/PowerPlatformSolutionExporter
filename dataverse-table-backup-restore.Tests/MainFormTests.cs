@@ -17,8 +17,12 @@ public sealed class MainFormTests
                 Assert.Equal("frmMain", form.Name);
                 Assert.Equal("Dataverse Snapshot Manager", form.Text);
 
-                Assert.Empty(FindControl<TextBox>(form, "txtEnvironmentUrl").Text);
-                Assert.Empty(FindControl<TextBox>(form, "txtUserName").Text);
+                var environmentList = FindControl<ComboBox>(form, "cboEnvironmentUrl");
+                var userNameList = FindControl<ComboBox>(form, "cboUserName");
+                Assert.Equal(ComboBoxStyle.DropDown, environmentList.DropDownStyle);
+                Assert.Equal(ComboBoxStyle.DropDown, userNameList.DropDownStyle);
+                Assert.NotNull(FindControl<Button>(form, "btnSaveConnectionProfile"));
+                Assert.NotNull(FindControl<Button>(form, "btnRemoveConnectionProfile"));
                 Assert.Empty(FindControl<TextBox>(form, "txtSolutionUniqueName").Text);
                 var tableGrid = FindControl<DataGridView>(form, "dgvTables");
                 Assert.DoesNotContain(tableGrid.Columns.Cast<DataGridViewColumn>(), column => column.HeaderText == "Design");

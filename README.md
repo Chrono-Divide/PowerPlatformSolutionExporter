@@ -8,6 +8,12 @@ The main form is `frmMain` and all application UI text is English. The applicati
 
 The default scope is **Custom tables**. All unmanaged custom tables returned by the connected environment are selected initially; use the checkboxes or selection buttons to narrow the snapshot. The optional **All tables** scope is provided for inspection, but snapshot, restore, and clear operations remain restricted to unmanaged custom tables.
 
+## Saved connections
+
+Environment URL and user name are editable drop-down lists. Choose **Save profile** to retain a pair, or connect successfully to save it automatically as the most recently used profile. **Remove** deletes the selected pair from the saved list.
+
+Profiles are stored in `%LocalAppData%\DataverseSnapshotManager\connection-profiles.json`. The profile contains only the environment URL, user-name hint, and last-used time. Passwords and access tokens are not written to this file; interactive sign-in and token caching remain managed by MSAL through the Dataverse client.
+
 ## Snapshot contents
 
 A `.dvsnapshot` file is a ZIP-compatible package that contains:
