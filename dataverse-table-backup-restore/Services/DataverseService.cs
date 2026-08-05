@@ -17,7 +17,7 @@ public enum TableScope
 public sealed class DataverseService : IDisposable
 {
     private const string PrototypeClientId = "51f81489-12ee-4a9e-aaae-a2591f45987d";
-    private const string PrototypeRedirectUri = "app://58145B91-0C36-4500-8554-080854F2AC97";
+    private const string PrototypeRedirectUri = "http://localhost";
     private ServiceClient? _client;
     private List<DataverseTableInfo> _allTables = [];
 
