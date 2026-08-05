@@ -46,7 +46,8 @@ public sealed class DataverseService : IDisposable
             "AuthType=OAuth;",
             $"Url={environmentUri.GetLeftPart(UriPartial.Authority)};",
             userPart,
-            "Integrated Security=true;",
+            // Do not enable Integrated Security here. The Entra UPN entered in the UI
+            // is not necessarily a Windows account that can be mapped to a local SID.
             $"AppId={PrototypeClientId};",
             $"RedirectUri={PrototypeRedirectUri};",
             $"TokenCacheStorePath={tokenCachePath};",
