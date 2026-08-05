@@ -26,7 +26,6 @@ partial class frmMain
     private DataGridViewTextBoxColumn colDisplayName;
     private DataGridViewTextBoxColumn colLogicalName;
     private DataGridViewTextBoxColumn colTableType;
-    private DataGridViewTextBoxColumn colDesignReference;
     private DataGridViewTextBoxColumn colPrimaryId;
     private Label lblTableSummary;
     private TableLayoutPanel pnlActions;
@@ -94,7 +93,6 @@ partial class frmMain
         colDisplayName = new DataGridViewTextBoxColumn();
         colLogicalName = new DataGridViewTextBoxColumn();
         colTableType = new DataGridViewTextBoxColumn();
-        colDesignReference = new DataGridViewTextBoxColumn();
         colPrimaryId = new DataGridViewTextBoxColumn();
         lblTableSummary = new Label();
         pnlActions = new TableLayoutPanel();
@@ -206,6 +204,7 @@ partial class frmMain
         //
         txtEnvironmentUrl.Location = new Point(122, 24);
         txtEnvironmentUrl.Name = "txtEnvironmentUrl";
+        txtEnvironmentUrl.PlaceholderText = "https://yourorg.crm.dynamics.com";
         txtEnvironmentUrl.Size = new Size(355, 23);
         txtEnvironmentUrl.TabIndex = 1;
         //
@@ -222,6 +221,7 @@ partial class frmMain
         //
         txtUserName.Location = new Point(567, 24);
         txtUserName.Name = "txtUserName";
+        txtUserName.PlaceholderText = "name@company.com (optional)";
         txtUserName.Size = new Size(250, 23);
         txtUserName.TabIndex = 3;
         //
@@ -356,7 +356,7 @@ partial class frmMain
         dgvTables.BackgroundColor = Color.White;
         dgvTables.BorderStyle = BorderStyle.Fixed3D;
         dgvTables.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-        dgvTables.Columns.AddRange(new DataGridViewColumn[] { colSelected, colDisplayName, colLogicalName, colTableType, colDesignReference, colPrimaryId });
+        dgvTables.Columns.AddRange(new DataGridViewColumn[] { colSelected, colDisplayName, colLogicalName, colTableType, colPrimaryId });
         dgvTables.Dock = DockStyle.Fill;
         dgvTables.Location = new Point(8, 62);
         dgvTables.MultiSelect = false;
@@ -381,7 +381,7 @@ partial class frmMain
         colDisplayName.HeaderText = "Display name";
         colDisplayName.Name = "colDisplayName";
         colDisplayName.ReadOnly = true;
-        colDisplayName.Width = 205;
+        colDisplayName.Width = 225;
         //
         // colLogicalName
         //
@@ -389,7 +389,7 @@ partial class frmMain
         colLogicalName.HeaderText = "Logical name";
         colLogicalName.Name = "colLogicalName";
         colLogicalName.ReadOnly = true;
-        colLogicalName.Width = 245;
+        colLogicalName.Width = 275;
         //
         // colTableType
         //
@@ -397,15 +397,7 @@ partial class frmMain
         colTableType.HeaderText = "Type";
         colTableType.Name = "colTableType";
         colTableType.ReadOnly = true;
-        colTableType.Width = 72;
-        //
-        // colDesignReference
-        //
-        colDesignReference.DataPropertyName = "DesignReference";
-        colDesignReference.HeaderText = "Design";
-        colDesignReference.Name = "colDesignReference";
-        colDesignReference.ReadOnly = true;
-        colDesignReference.Width = 70;
+        colTableType.Width = 80;
         //
         // colPrimaryId
         //
@@ -472,14 +464,15 @@ partial class frmMain
         lblSolutionUniqueName.Name = "lblSolutionUniqueName";
         lblSolutionUniqueName.Size = new Size(83, 15);
         lblSolutionUniqueName.TabIndex = 0;
-        lblSolutionUniqueName.Text = "Solution name";
+        lblSolutionUniqueName.Text = "Solution unique name";
         //
         // txtSolutionUniqueName
         //
         txtSolutionUniqueName.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-        txtSolutionUniqueName.Location = new Point(111, 24);
+        txtSolutionUniqueName.Location = new Point(150, 24);
         txtSolutionUniqueName.Name = "txtSolutionUniqueName";
-        txtSolutionUniqueName.Size = new Size(400, 23);
+        txtSolutionUniqueName.PlaceholderText = "Existing unmanaged solution unique name";
+        txtSolutionUniqueName.Size = new Size(361, 23);
         txtSolutionUniqueName.TabIndex = 1;
         //
         // lblSnapshotContent

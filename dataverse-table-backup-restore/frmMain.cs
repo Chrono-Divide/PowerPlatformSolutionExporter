@@ -6,10 +6,6 @@ namespace dataverse_table_backup_restore;
 
 public partial class frmMain : Form
 {
-    private const string DefaultEnvironmentUrl = "https://orga4f286c3.crm7.dynamics.com/";
-    private const string DefaultUserName = "ika@proface-sys.com";
-    private const string DefaultSolutionUniqueName = "ShinsaSeikyuJikenShoriJokyoTouKanriSystem";
-
     private readonly DataverseService _dataverseService = new();
     private readonly PacCliService _pacCliService = new();
     private readonly SnapshotPackageService _snapshotPackageService;
@@ -25,9 +21,6 @@ public partial class frmMain : Form
         dgvTables.DataSource = _tableRows;
         cboTableScope.SelectedIndex = 0;
         cboSnapshotContent.SelectedIndex = 1;
-        txtEnvironmentUrl.Text = DefaultEnvironmentUrl;
-        txtUserName.Text = DefaultUserName;
-        txtSolutionUniqueName.Text = DefaultSolutionUniqueName;
         txtSnapshotFolder.Text = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
             "DataverseSnapshots");
@@ -309,7 +302,7 @@ public partial class frmMain : Form
         {
             _tableRows.Add(new TableGridRow
             {
-                Selected = scope == TableScope.Custom && table.IsDesignTable,
+                Selected = scope == TableScope.Custom && table.IsCustom,
                 Table = table,
             });
         }
@@ -577,7 +570,6 @@ public partial class frmMain : Form
         public string DisplayName => Table.DisplayName;
         public string LogicalName => Table.LogicalName;
         public string TableType => Table.IsCustom ? "Custom" : "Standard";
-        public string DesignReference => Table.IsDesignTable ? "Matched" : string.Empty;
         public string PrimaryId => Table.PrimaryIdAttribute;
 
         public event PropertyChangedEventHandler? PropertyChanged;

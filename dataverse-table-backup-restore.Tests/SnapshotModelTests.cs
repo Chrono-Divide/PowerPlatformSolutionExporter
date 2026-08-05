@@ -7,15 +7,6 @@ namespace dataverse_table_backup_restore.Tests;
 public sealed class SnapshotModelTests
 {
     [Fact]
-    public void DesignCatalogContainsExactlyTheVerified72Tables()
-    {
-        Assert.Equal(72, DesignTableCatalog.LogicalNames.Count);
-        Assert.All(DesignTableCatalog.LogicalNames, name => Assert.StartsWith("kfs_", name));
-        Assert.Contains("kfs_jiseki_shori_jouhou", DesignTableCatalog.LogicalNames);
-        Assert.Contains("kfs_youkyuu_shorui", DesignTableCatalog.LogicalNames);
-    }
-
-    [Fact]
     public void SnapshotValuesRoundTripSupportedDataverseTypes()
     {
         var id = Guid.NewGuid();
@@ -30,7 +21,7 @@ public sealed class SnapshotModelTests
             new Money(500.25m),
             new OptionSetValue(7),
             new OptionSetValueCollection([new OptionSetValue(1), new OptionSetValue(3)]),
-            new EntityReference("kfs_user", id) { Name = "Example User" },
+            new EntityReference("sample_parent", id) { Name = "Example Parent" },
             id,
             new DateTime(2026, 8, 5, 10, 30, 0, DateTimeKind.Utc),
             new byte[] { 1, 2, 3, 4 },

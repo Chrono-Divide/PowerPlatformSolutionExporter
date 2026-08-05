@@ -15,7 +15,6 @@ public sealed class DataverseTableInfo
     public string? EntitySetName { get; init; }
     public bool IsCustom { get; init; }
     public bool IsActivity { get; init; }
-    public bool IsDesignTable => DesignTableCatalog.Contains(LogicalName);
 
     [JsonIgnore]
     public required EntityMetadata Metadata { get; init; }

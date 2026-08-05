@@ -17,6 +17,12 @@ public sealed class MainFormTests
                 Assert.Equal("frmMain", form.Name);
                 Assert.Equal("Dataverse Snapshot Manager", form.Text);
 
+                Assert.Empty(FindControl<TextBox>(form, "txtEnvironmentUrl").Text);
+                Assert.Empty(FindControl<TextBox>(form, "txtUserName").Text);
+                Assert.Empty(FindControl<TextBox>(form, "txtSolutionUniqueName").Text);
+                var tableGrid = FindControl<DataGridView>(form, "dgvTables");
+                Assert.DoesNotContain(tableGrid.Columns.Cast<DataGridViewColumn>(), column => column.HeaderText == "Design");
+
                 var allText = EnumerateControls(form)
                     .Select(control => control.Text)
                     .Where(text => !string.IsNullOrWhiteSpace(text));
@@ -87,5 +93,11 @@ public sealed class MainFormTests
                 yield return descendant;
             }
         }
+    }
+
+    private static T FindControl<T>(Control parent, string name)
+        where T : Control
+    {
+        return Assert.IsType<T>(parent.Controls.Find(name, searchAllChildren: true).Single());
     }
 }

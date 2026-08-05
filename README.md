@@ -1,18 +1,12 @@
 # Dataverse Snapshot Manager
 
-A Windows Forms utility for taking point-in-time snapshots of Dataverse custom table structure and data, restoring custom tables from a snapshot, and clearing the records from one custom table without deleting its structure.
+A general-purpose Windows Forms utility for taking point-in-time snapshots of Dataverse custom table structure and data, restoring custom tables from a snapshot, and clearing the records from one custom table without deleting its structure.
 
-The main form is `frmMain` and all application UI text is English.
+The main form is `frmMain` and all application UI text is English. The application has no built-in environment, account, publisher, table-name, or solution-name catalog.
 
-## Verified environment scope
+## Table selection
 
-The `テーブル一覧` worksheet in `Dataverse_データベース設計書(V0.1).xlsx` defines 72 `kfs_...` custom tables:
-
-- 5 business-data tables
-- 6 additional/operations tables
-- 61 master/reference tables
-
-All 72 logical names were matched one-to-one with the 72 tables exported from the `ShinsaSeikyuJikenShoriJokyoTouKanriSystem` Dataverse solution in `PowerPagesDeveloper-051326-150635`. No designed table was missing and no additional table was present in that solution at verification time.
+The default scope is **Custom tables**. All unmanaged custom tables returned by the connected environment are selected initially; use the checkboxes or selection buttons to narrow the snapshot. The optional **All tables** scope is provided for inspection, but snapshot, restore, and clear operations remain restricted to unmanaged custom tables.
 
 ## Snapshot contents
 
@@ -54,11 +48,7 @@ Dataverse relationship cascade rules can delete related records in other tables.
 - Permission to read metadata/data, export/import the configured solution, and create/update/delete records as required.
 - Interactive Microsoft sign-in may appear when the application connects through `Microsoft.PowerPlatform.Dataverse.Client`.
 
-The defaults target:
-
-- Environment: `https://orga4f286c3.crm7.dynamics.com/`
-- User: `ika@proface-sys.com`
-- Solution: `ShinsaSeikyuJikenShoriJokyoTouKanriSystem`
+Enter the target environment URL and, optionally, a sign-in account hint. To create a structure snapshot, enter the unique name of an existing unmanaged solution that contains the selected custom tables.
 
 ## Build
 
@@ -71,4 +61,5 @@ dotnet build dataverse-table-backup-restore.slnx
 - File, full-size image, activity party-list, and other special Dataverse values require manual verification; the manifest records warnings when detected.
 - Audit history and immutable system timestamps/users are not recreated as ordinary writable fields.
 - Solution import restores missing or changed components but does not remove extra schema components.
+- The configured solution must contain the selected custom tables for a complete structure snapshot.
 - Record restore is intentionally sequential to make errors visible and reduce throttling risk; very large tables can take time.
