@@ -1,0 +1,26 @@
+# Visual Studio user settings and caches
+.vs/
+*.user
+*.suo
+
+# .NET build output
+[Bb]in/
+[Oo]bj/
+
+# Test and coverage output
+TestResults/
+coverage*.xml
+*.coverage
+*.coveragexml
+
+# Package artifacts
+*.nupkg
+*.snupkg
+packages/
+
+# Common local files
+.env
+.env.*
+!.env.example
+*.log
+
