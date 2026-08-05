@@ -53,19 +53,68 @@ public sealed class DataverseService : IDisposable
             "LoginPrompt=Auto;",
             "RequireNewInstance=true;");
 
-        var client = await Task.Run(() => new ServiceClient(connectionString), cancellationToken);
+        // Interactive MSAL authentication must be started from the WinForms STA thread.
+        // Task.Run uses an MTA thread and can fail before the Microsoft sign-in window opens.
+        await Task.Yield();
+        cancellationToken.ThrowIfCancellationRequested();
+        if (Thread.CurrentThread.GetApartmentState() != ApartmentState.STA)
+        {
+            throw new InvalidOperationException(
+                "Interactive Dataverse sign-in must be started from the WinForms UI thread (STA). No sign-in was attempted.");
+        }
+
+        ServiceClient client;
+        try
+        {
+            client = new ServiceClient(connectionString);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            throw CreateConnectionException(environmentUri, client: null, exception);
+        }
+
         if (!client.IsReady)
         {
-            var message = string.IsNullOrWhiteSpace(client.LastError)
-                ? "Dataverse authentication did not complete successfully."
-                : client.LastError;
+            var connectionException = CreateConnectionException(environmentUri, client, client.LastException);
             client.Dispose();
-            throw new InvalidOperationException(message, client.LastException);
+            throw connectionException;
         }
 
         _client?.Dispose();
         _client = client;
         _allTables = [];
+    }
+
+    private static InvalidOperationException CreateConnectionException(
+        Uri environmentUri,
+        ServiceClient? client,
+        Exception? exception)
+    {
+        var details = new List<string>
+        {
+            $"Unable to connect to {environmentUri.GetLeftPart(UriPartial.Authority)}.",
+        };
+
+        if (!string.IsNullOrWhiteSpace(client?.LastError))
+        {
+            details.Add($"Dataverse client: {client.LastError.Trim()}");
+        }
+
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            var detail = $"{current.GetType().Name}: {current.Message.Trim()}";
+            if (!details.Contains(detail, StringComparer.Ordinal))
+            {
+                details.Add(detail);
+            }
+        }
+
+        if (details.Count == 1)
+        {
+            details.Add("Dataverse authentication did not complete successfully.");
+        }
+
+        return new InvalidOperationException(string.Join(Environment.NewLine, details), exception);
     }
 
     public async Task<IReadOnlyList<DataverseTableInfo>> LoadTablesAsync(

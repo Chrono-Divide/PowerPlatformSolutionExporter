@@ -401,7 +401,7 @@ public partial class frmMain : Form
         }
         catch (Exception exception)
         {
-            AppendLog($"[{DateTime.Now:HH:mm:ss}] ERROR: {exception.Message}");
+            AppendLog($"[{DateTime.Now:HH:mm:ss}] ERROR: {FormatException(exception)}");
             ShowError($"{operationName} failed", exception);
         }
         finally
@@ -467,7 +467,23 @@ public partial class frmMain : Form
 
     private void ShowError(string title, Exception exception)
     {
-        MessageBox.Show(this, exception.Message, title, MessageBoxButtons.OK, MessageBoxIcon.Error);
+        MessageBox.Show(this, FormatException(exception), title, MessageBoxButtons.OK, MessageBoxIcon.Error);
+    }
+
+    private static string FormatException(Exception exception)
+    {
+        var messages = new List<string>();
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            var message = current.Message.Trim();
+            if (!string.IsNullOrWhiteSpace(message)
+                && !messages.Any(existing => existing.Contains(message, StringComparison.Ordinal)))
+            {
+                messages.Add(message);
+            }
+        }
+
+        return string.Join(Environment.NewLine + Environment.NewLine, messages);
     }
 
     private static bool ConfirmExactText(string title, string prompt, string expectedText)
