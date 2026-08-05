@@ -24,3 +24,6 @@ packages/
 !.env.example
 *.log
 
+# Dataverse snapshot packages can contain sensitive business data
+*.dvsnapshot
+DataverseSnapshots/
