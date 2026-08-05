@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Xml.Linq;
 using dataverse_table_backup_restore.Models;
 
 namespace dataverse_table_backup_restore.Services;
@@ -42,6 +43,7 @@ public sealed class SnapshotPackageService
 
         try
         {
+            var warnings = new List<string>();
             string? solutionSha256 = null;
             if (options.IncludeStructure)
             {
@@ -53,10 +55,21 @@ public sealed class SnapshotPackageService
                     progress,
                     cancellationToken);
                 solutionSha256 = await ComputeSha256Async(solutionPath, cancellationToken);
+
+                var solutionTableNames = ReadSolutionTableNames(solutionPath);
+                var selectedTableNames = options.Tables
+                    .Select(table => table.LogicalName)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                ValidateSolutionCoverage(selectedTableNames, solutionTableNames, "The exported solution");
+                var additionalTableCount = solutionTableNames.Count(name => !selectedTableNames.Contains(name));
+                if (additionalTableCount > 0)
+                {
+                    warnings.Add(
+                        $"solution.zip contains {additionalTableCount:N0} additional table components. Structure restore imports the entire solution, not only the tables selected for data capture.");
+                }
             }
 
             var tableManifests = new List<SnapshotTableManifest>();
-            var warnings = new List<string>();
             foreach (var table in options.Tables)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -160,32 +173,18 @@ public sealed class SnapshotPackageService
             ZipFile.ExtractToDirectory(options.SnapshotFile, temporaryDirectory);
             var manifest = await LoadManifestAsync(Path.Combine(temporaryDirectory, ManifestFileName), cancellationToken);
             ValidateManifest(manifest, options.EnvironmentUrl);
+            var prepared = await ValidateExtractedSnapshotAsync(
+                temporaryDirectory,
+                manifest,
+                options.RestoreStructure,
+                options.RestoreData,
+                cancellationToken);
 
             if (options.RestoreStructure)
             {
-                if (!manifest.IncludesStructure)
-                {
-                    throw new InvalidOperationException("This snapshot does not contain a solution package for structure restore.");
-                }
-
-                var solutionPath = Path.Combine(temporaryDirectory, SolutionFileName);
-                if (!File.Exists(solutionPath))
-                {
-                    throw new InvalidDataException("The snapshot manifest references structure data, but solution.zip is missing.");
-                }
-
-                if (string.IsNullOrWhiteSpace(manifest.SolutionSha256) ||
-                    !string.Equals(
-                        await ComputeSha256Async(solutionPath, cancellationToken),
-                        manifest.SolutionSha256,
-                        StringComparison.OrdinalIgnoreCase))
-                {
-                    throw new InvalidDataException("Checksum validation failed for solution.zip.");
-                }
-
                 await _pacCliService.ImportSolutionAsync(
                     options.EnvironmentUrl,
-                    solutionPath,
+                    prepared.SolutionPath!,
                     progress,
                     cancellationToken);
                 await _dataverseService.RefreshMetadataAsync(progress, cancellationToken);
@@ -197,34 +196,13 @@ public sealed class SnapshotPackageService
                 return (manifest, summary);
             }
 
-            if (!manifest.IncludesData)
+            if (!options.RestoreStructure)
             {
-                throw new InvalidOperationException("This snapshot does not contain table data.");
+                await _dataverseService.RefreshMetadataAsync(progress, cancellationToken);
             }
 
-            var tableSnapshots = new List<TableSnapshot>();
-            foreach (var tableManifest in manifest.Tables)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                if (!tableManifest.IsCustom)
-                {
-                    throw new InvalidOperationException($"Restore is limited to custom tables. Snapshot table '{tableManifest.LogicalName}' is not custom.");
-                }
-
-                var tablePath = ResolveSnapshotPath(temporaryDirectory, tableManifest.FileName);
-                var actualHash = await ComputeSha256Async(tablePath, cancellationToken);
-                if (!string.Equals(actualHash, tableManifest.Sha256, StringComparison.OrdinalIgnoreCase))
-                {
-                    throw new InvalidDataException($"Checksum validation failed for '{tableManifest.LogicalName}'.");
-                }
-
-                await using var stream = File.OpenRead(tablePath);
-                var snapshot = await JsonSerializer.DeserializeAsync<TableSnapshot>(stream, _jsonOptions, cancellationToken)
-                               ?? throw new InvalidDataException($"Unable to read table snapshot '{tableManifest.LogicalName}'.");
-                tableSnapshots.Add(snapshot);
-            }
-
-            tableSnapshots = OrderByDependencies(tableSnapshots);
+            _dataverseService.ValidateRestoreTargets(prepared.TableSnapshots);
+            var tableSnapshots = OrderByDependencies(prepared.TableSnapshots);
             progress?.Report("Restore pass 1/2: scalar values and record creation...");
             foreach (var tableSnapshot in tableSnapshots)
             {
@@ -241,7 +219,7 @@ public sealed class SnapshotPackageService
             {
                 foreach (var tableSnapshot in tableSnapshots.AsEnumerable().Reverse())
                 {
-                    summary.Deleted += await _dataverseService.DeleteRecordsNotInSnapshotAsync(tableSnapshot, progress, cancellationToken);
+                    Merge(summary, await _dataverseService.DeleteRecordsNotInSnapshotAsync(tableSnapshot, progress, cancellationToken));
                 }
             }
 
@@ -263,6 +241,48 @@ public sealed class SnapshotPackageService
                ?? throw new InvalidDataException("Unable to read the snapshot manifest.");
     }
 
+    public async Task<SnapshotValidationResult> ValidateSnapshotAsync(
+        string snapshotFile,
+        string targetEnvironmentUrl,
+        bool requireStructure,
+        bool requireData,
+        CancellationToken cancellationToken)
+    {
+        if (!File.Exists(snapshotFile))
+        {
+            throw new FileNotFoundException("Snapshot file was not found.", snapshotFile);
+        }
+
+        var temporaryDirectory = CreateTemporaryDirectory();
+        try
+        {
+            ZipFile.ExtractToDirectory(snapshotFile, temporaryDirectory);
+            var manifest = await LoadManifestAsync(Path.Combine(temporaryDirectory, ManifestFileName), cancellationToken);
+            ValidateManifest(manifest, targetEnvironmentUrl);
+            var prepared = await ValidateExtractedSnapshotAsync(
+                temporaryDirectory,
+                manifest,
+                requireStructure,
+                requireData,
+                cancellationToken);
+            var manifestTableNames = manifest.Tables
+                .Select(table => table.LogicalName)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            return new SnapshotValidationResult
+            {
+                Manifest = manifest,
+                SolutionTableCount = prepared.SolutionTableNames.Count,
+                AdditionalSolutionTableCount = prepared.SolutionTableNames.Count(name => !manifestTableNames.Contains(name)),
+                TotalRecordCount = prepared.TableSnapshots.Sum(table => table.Records.Count),
+            };
+        }
+        finally
+        {
+            DeleteTemporaryDirectory(temporaryDirectory);
+        }
+    }
+
     private async Task<SnapshotManifest> LoadManifestAsync(string manifestPath, CancellationToken cancellationToken)
     {
         if (!File.Exists(manifestPath))
@@ -273,6 +293,80 @@ public sealed class SnapshotPackageService
         await using var stream = File.OpenRead(manifestPath);
         return await JsonSerializer.DeserializeAsync<SnapshotManifest>(stream, _jsonOptions, cancellationToken)
                ?? throw new InvalidDataException("Unable to read the snapshot manifest.");
+    }
+
+    private async Task<PreparedSnapshot> ValidateExtractedSnapshotAsync(
+        string temporaryDirectory,
+        SnapshotManifest manifest,
+        bool requireStructure,
+        bool requireData,
+        CancellationToken cancellationToken)
+    {
+        ValidateManifestTableList(manifest);
+
+        string? solutionPath = null;
+        IReadOnlySet<string> solutionTableNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (requireStructure)
+        {
+            if (!manifest.IncludesStructure)
+            {
+                throw new InvalidOperationException("This snapshot does not contain a solution package for structure restore.");
+            }
+
+            solutionPath = Path.Combine(temporaryDirectory, SolutionFileName);
+            if (!File.Exists(solutionPath))
+            {
+                throw new InvalidDataException("The snapshot manifest references structure data, but solution.zip is missing.");
+            }
+
+            if (string.IsNullOrWhiteSpace(manifest.SolutionSha256) ||
+                !string.Equals(
+                    await ComputeSha256Async(solutionPath, cancellationToken),
+                    manifest.SolutionSha256,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidDataException("Checksum validation failed for solution.zip.");
+            }
+
+            solutionTableNames = ReadSolutionTableNames(solutionPath);
+            ValidateSolutionCoverage(
+                manifest.Tables.Select(table => table.LogicalName),
+                solutionTableNames,
+                "The snapshot solution");
+        }
+
+        var tableSnapshots = new List<TableSnapshot>();
+        if (requireData)
+        {
+            if (!manifest.IncludesData)
+            {
+                throw new InvalidOperationException("This snapshot does not contain table data.");
+            }
+
+            foreach (var tableManifest in manifest.Tables)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!tableManifest.IsCustom)
+                {
+                    throw new InvalidOperationException($"Restore is limited to custom tables. Snapshot table '{tableManifest.LogicalName}' is not custom.");
+                }
+
+                var tablePath = ResolveSnapshotPath(temporaryDirectory, tableManifest.FileName);
+                var actualHash = await ComputeSha256Async(tablePath, cancellationToken);
+                if (!string.Equals(actualHash, tableManifest.Sha256, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidDataException($"Checksum validation failed for '{tableManifest.LogicalName}'.");
+                }
+
+                await using var stream = File.OpenRead(tablePath);
+                var snapshot = await JsonSerializer.DeserializeAsync<TableSnapshot>(stream, _jsonOptions, cancellationToken)
+                               ?? throw new InvalidDataException($"Unable to read table snapshot '{tableManifest.LogicalName}'.");
+                ValidateTableSnapshot(tableManifest, snapshot);
+                tableSnapshots.Add(snapshot);
+            }
+        }
+
+        return new PreparedSnapshot(solutionPath, solutionTableNames, tableSnapshots);
     }
 
     private static void ValidateManifest(SnapshotManifest manifest, string targetEnvironmentUrl)
@@ -289,6 +383,159 @@ public sealed class SnapshotPackageService
         {
             throw new InvalidOperationException(
                 $"The snapshot belongs to '{manifest.EnvironmentUrl}', but the connected target is '{targetEnvironmentUrl}'. Cross-environment restore is blocked.");
+        }
+    }
+
+    private static void ValidateManifestTableList(SnapshotManifest manifest)
+    {
+        if (manifest.Tables.Count == 0)
+        {
+            throw new InvalidDataException("The snapshot manifest does not contain any tables.");
+        }
+
+        var duplicateLogicalName = manifest.Tables
+            .GroupBy(table => table.LogicalName, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(group => group.Count() > 1)
+            ?.Key;
+        if (duplicateLogicalName is not null)
+        {
+            throw new InvalidDataException($"The snapshot contains duplicate table '{duplicateLogicalName}'.");
+        }
+
+        var duplicateFileName = manifest.Tables
+            .GroupBy(table => table.FileName, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault(group => group.Count() > 1)
+            ?.Key;
+        if (duplicateFileName is not null)
+        {
+            throw new InvalidDataException($"The snapshot contains duplicate table file '{duplicateFileName}'.");
+        }
+    }
+
+    private static void ValidateTableSnapshot(SnapshotTableManifest tableManifest, TableSnapshot snapshot)
+    {
+        if (snapshot.Schema is null || snapshot.Schema.Attributes is null || snapshot.Records is null)
+        {
+            throw new InvalidDataException($"Table snapshot '{tableManifest.LogicalName}' is missing schema or record collections.");
+        }
+
+        if (!string.Equals(tableManifest.LogicalName, snapshot.Schema.LogicalName, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidDataException(
+                $"Table manifest '{tableManifest.LogicalName}' does not match schema '{snapshot.Schema.LogicalName}'.");
+        }
+
+        if (!snapshot.Schema.IsCustom)
+        {
+            throw new InvalidDataException($"Snapshot table '{snapshot.Schema.LogicalName}' is not marked as custom.");
+        }
+
+        if (tableManifest.AttributeCount != snapshot.Schema.Attributes.Count)
+        {
+            throw new InvalidDataException(
+                $"Attribute count mismatch for '{tableManifest.LogicalName}': manifest {tableManifest.AttributeCount:N0}, file {snapshot.Schema.Attributes.Count:N0}.");
+        }
+
+        if (tableManifest.RecordCount != snapshot.Records.Count)
+        {
+            throw new InvalidDataException(
+                $"Record count mismatch for '{tableManifest.LogicalName}': manifest {tableManifest.RecordCount:N0}, file {snapshot.Records.Count:N0}.");
+        }
+
+        var attributeNames = snapshot.Schema.Attributes
+            .Select(attribute => attribute.LogicalName)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if (attributeNames.Count != snapshot.Schema.Attributes.Count)
+        {
+            throw new InvalidDataException($"Snapshot schema '{tableManifest.LogicalName}' contains duplicate attributes.");
+        }
+
+        var recordIds = new HashSet<Guid>();
+        foreach (var record in snapshot.Records)
+        {
+            if (record is null || record.Attributes is null)
+            {
+                throw new InvalidDataException($"Snapshot table '{tableManifest.LogicalName}' contains an invalid record object.");
+            }
+
+            if (record.Id == Guid.Empty || !recordIds.Add(record.Id))
+            {
+                throw new InvalidDataException($"Snapshot table '{tableManifest.LogicalName}' contains an empty or duplicate record ID.");
+            }
+
+            foreach (var attribute in record.Attributes)
+            {
+                if (!attributeNames.Contains(attribute.Key))
+                {
+                    throw new InvalidDataException(
+                        $"Record {record.Id:D} in '{tableManifest.LogicalName}' contains unknown attribute '{attribute.Key}'.");
+                }
+
+                if (attribute.Value is null)
+                {
+                    throw new InvalidDataException(
+                        $"Record {record.Id:D} in '{tableManifest.LogicalName}' contains a null snapshot value object for '{attribute.Key}'.");
+                }
+
+                if (attribute.Value.IsUnsupported)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    _ = attribute.Value.ToSdkValue();
+                }
+                catch (Exception exception) when (exception is FormatException or InvalidDataException or NotSupportedException)
+                {
+                    throw new InvalidDataException(
+                        $"Record {record.Id:D} in '{tableManifest.LogicalName}' contains invalid snapshot value for '{attribute.Key}'.",
+                        exception);
+                }
+            }
+        }
+    }
+
+    private static IReadOnlySet<string> ReadSolutionTableNames(string solutionPath)
+    {
+        using var archive = ZipFile.OpenRead(solutionPath);
+        var customizationsEntry = archive.GetEntry("customizations.xml")
+                                  ?? throw new InvalidDataException("solution.zip does not contain customizations.xml.");
+        using var stream = customizationsEntry.Open();
+        var document = XDocument.Load(stream, LoadOptions.None);
+        var entities = document
+            .Descendants()
+            .Where(element => string.Equals(element.Name.LocalName, "Entities", StringComparison.OrdinalIgnoreCase))
+            .SelectMany(element => element.Elements())
+            .Where(element => string.Equals(element.Name.LocalName, "Entity", StringComparison.OrdinalIgnoreCase))
+            .Select(element => element.Elements().FirstOrDefault(child =>
+                string.Equals(child.Name.LocalName, "Name", StringComparison.OrdinalIgnoreCase))?.Value)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Select(name => name!)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        if (entities.Count == 0)
+        {
+            throw new InvalidDataException("solution.zip does not contain any table components.");
+        }
+
+        return entities;
+    }
+
+    private static void ValidateSolutionCoverage(
+        IEnumerable<string> requiredTableNames,
+        IReadOnlySet<string> solutionTableNames,
+        string sourceDescription)
+    {
+        var missing = requiredTableNames
+            .Where(name => !solutionTableNames.Contains(name))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (missing.Count > 0)
+        {
+            throw new InvalidDataException(
+                $"{sourceDescription} does not contain structure for {missing.Count:N0} selected table(s): {string.Join(", ", missing)}.");
         }
     }
 
@@ -380,4 +627,9 @@ public sealed class SnapshotPackageService
         target.Skipped += source.Skipped;
         target.Failed += source.Failed;
     }
+
+    private sealed record PreparedSnapshot(
+        string? SolutionPath,
+        IReadOnlySet<string> SolutionTableNames,
+        List<TableSnapshot> TableSnapshots);
 }

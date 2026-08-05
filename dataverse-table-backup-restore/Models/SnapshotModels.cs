@@ -149,7 +149,7 @@ public sealed class SnapshotValue
         {
             "Null" => null,
             "String" => Value,
-            "Boolean" => string.Equals(Value, "true", StringComparison.OrdinalIgnoreCase),
+            "Boolean" => bool.Parse(Value!),
             "Int32" => int.Parse(Value!, CultureInfo.InvariantCulture),
             "Int64" => long.Parse(Value!, CultureInfo.InvariantCulture),
             "Decimal" => decimal.Parse(Value!, CultureInfo.InvariantCulture),
@@ -196,4 +196,12 @@ public sealed class OperationSummary
     public int Deleted { get; set; }
     public int Skipped { get; set; }
     public int Failed { get; set; }
+}
+
+public sealed class SnapshotValidationResult
+{
+    public required SnapshotManifest Manifest { get; init; }
+    public int SolutionTableCount { get; init; }
+    public int AdditionalSolutionTableCount { get; init; }
+    public int TotalRecordCount { get; init; }
 }

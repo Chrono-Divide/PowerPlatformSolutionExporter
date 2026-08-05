@@ -303,17 +303,6 @@ public partial class frmMain : Form
             return;
         }
 
-        SnapshotManifest manifest;
-        try
-        {
-            manifest = await _snapshotPackageService.ReadManifestAsync(snapshotFile, CancellationToken.None);
-        }
-        catch (Exception exception)
-        {
-            ShowError("Unable to read the snapshot", exception);
-            return;
-        }
-
         var restoreStructure = chkRestoreStructure.Checked;
         var restoreData = chkRestoreData.Checked;
         if (!restoreStructure && !restoreData)
@@ -322,14 +311,45 @@ public partial class frmMain : Form
             return;
         }
 
+        SnapshotValidationResult validation;
+        try
+        {
+            validation = await _snapshotPackageService.ValidateSnapshotAsync(
+                snapshotFile,
+                cboEnvironmentUrl.Text.Trim(),
+                restoreStructure,
+                restoreData,
+                CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            ShowError("Snapshot validation failed; no restore was started", exception);
+            return;
+        }
+
+        var manifest = validation.Manifest;
+        if (string.IsNullOrWhiteSpace(txtSolutionUniqueName.Text))
+        {
+            txtSolutionUniqueName.Text = manifest.SolutionUniqueName;
+        }
+
         var strictWarning = chkDeleteExtraRecords.Checked
             ? "\n\nWARNING: Records not present in the snapshot will be deleted."
+            : string.Empty;
+        var structureWarning = restoreStructure
+            ? $"\nSolution tables: {validation.SolutionTableCount:N0}" +
+              $"\nAdditional solution tables: {validation.AdditionalSolutionTableCount:N0}" +
+              "\n\nStructure restore imports and publishes the entire unmanaged solution. It may overwrite included customizations and does not delete extra schema."
+            : string.Empty;
+        var packageWarnings = manifest.Warnings.Count > 0
+            ? $"\n\nSnapshot warnings: {manifest.Warnings.Count:N0}\n- {string.Join("\n- ", manifest.Warnings.Take(5))}"
             : string.Empty;
         var confirmation = MessageBox.Show(
             this,
             $"Restore snapshot from {manifest.CreatedUtc.ToLocalTime():yyyy-MM-dd HH:mm:ss}?\n" +
             $"Tables: {manifest.Tables.Count:N0}\n" +
-            $"Target: {cboEnvironmentUrl.Text.Trim()}" + strictWarning,
+            $"Data records: {validation.TotalRecordCount:N0}\n" +
+            $"Target: {cboEnvironmentUrl.Text.Trim()}" + structureWarning + packageWarnings + strictWarning,
             "Confirm Restore",
             MessageBoxButtons.YesNo,
             chkDeleteExtraRecords.Checked ? MessageBoxIcon.Warning : MessageBoxIcon.Question,
@@ -350,10 +370,17 @@ public partial class frmMain : Form
                 var safetyTables = allTables.Where(table => table.IsCustom && manifestNames.Contains(table.LogicalName)).ToList();
                 if (safetyTables.Count > 0)
                 {
+                    var safetyIncludesStructure = manifest.IncludesStructure &&
+                        !string.IsNullOrWhiteSpace(txtSolutionUniqueName.Text);
+                    if (!safetyIncludesStructure)
+                    {
+                        progress.Report("The source snapshot has no structure package. The safety snapshot will contain current data only.");
+                    }
+
                     await _snapshotPackageService.CreateSnapshotAsync(
                         CreateSnapshotOptions(
                             safetyTables,
-                            includeStructure: true,
+                            includeStructure: safetyIncludesStructure,
                             includeData: true,
                             content: "Safety snapshot before restore"),
                         progress,
@@ -422,13 +449,13 @@ public partial class frmMain : Form
                     content: $"Automatic safety snapshot before clearing {table.LogicalName}"),
                 progress,
                 cancellationToken);
-            var deleted = await _dataverseService.ClearTableDataAsync(table, progress, cancellationToken);
+            var deleteSummary = await _dataverseService.ClearTableDataAsync(table, progress, cancellationToken);
             MessageBox.Show(
                 this,
-                $"Table data cleared.\n\nDeleted: {deleted:N0}\nSafety snapshot:\n{safetySnapshot}",
-                "Clear Complete",
+                $"Clear operation completed.\n\nDeleted: {deleteSummary.Deleted:N0}\nFailed: {deleteSummary.Failed:N0}\nSafety snapshot:\n{safetySnapshot}",
+                deleteSummary.Failed == 0 ? "Clear Complete" : "Clear Completed with Errors",
                 MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+                deleteSummary.Failed == 0 ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
         });
     }
 

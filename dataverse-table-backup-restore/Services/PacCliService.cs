@@ -5,6 +5,13 @@ namespace dataverse_table_backup_restore.Services;
 
 public sealed class PacCliService
 {
+    private readonly string? _pacExecutablePath;
+
+    public PacCliService(string? pacExecutablePath = null)
+    {
+        _pacExecutablePath = pacExecutablePath;
+    }
+
     public async Task ExportSolutionAsync(
         string environmentUrl,
         string solutionUniqueName,
@@ -58,7 +65,7 @@ public sealed class PacCliService
         return result.StandardOutput;
     }
 
-    private static async Task<PacResult> RunAsync(
+    private async Task<PacResult> RunAsync(
         IReadOnlyList<string> arguments,
         IProgress<string>? progress,
         CancellationToken cancellationToken)
@@ -67,7 +74,7 @@ public sealed class PacCliService
         {
             StartInfo = new ProcessStartInfo
             {
-                FileName = "pac",
+                FileName = _pacExecutablePath ?? ResolvePacExecutable(),
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
@@ -135,6 +142,42 @@ public sealed class PacCliService
         }
 
         return new PacResult(process.ExitCode, string.Join(Environment.NewLine, output), string.Join(Environment.NewLine, errors));
+    }
+
+    private static string ResolvePacExecutable()
+    {
+        var pathValue = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+        var executableNames = OperatingSystem.IsWindows()
+            ? new[] { "pac.exe", "pac.launcher.exe", "pac.cmd", "pac.bat" }
+            : new[] { "pac" };
+
+        foreach (var directory in pathValue.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            foreach (var executableName in executableNames)
+            {
+                var candidate = Path.Combine(directory, executableName);
+                if (!File.Exists(candidate))
+                {
+                    continue;
+                }
+
+                if (OperatingSystem.IsWindows() &&
+                    Path.GetExtension(candidate) is ".cmd" or ".bat")
+                {
+                    var launcher = Path.Combine(directory, "pac.launcher.exe");
+                    if (File.Exists(launcher))
+                    {
+                        return launcher;
+                    }
+
+                    continue;
+                }
+
+                return candidate;
+            }
+        }
+
+        throw new FileNotFoundException("Power Platform CLI (pac) was not found on PATH.");
     }
 
     private static void EnsureSuccess(PacResult result, string operation)

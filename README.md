@@ -24,16 +24,28 @@ A `.dvsnapshot` file is a ZIP-compatible package that contains:
 
 Snapshot packages can contain passwords, personal information, and other business data. They are excluded from Git by `.gitignore`; store them in an access-controlled location.
 
+The selected-table JSON and the structure package have different scopes. Data is captured only for the selected tables, but `solution.zip` is the **entire named solution**. Before creating a snapshot, the application verifies that the solution contains every selected table. If the solution contains additional tables, the manifest and operation log record a warning because a later structure restore imports those additional components too.
+
+Creation is read-only against Dataverse. It exports the solution, reads metadata, and retrieves records in pages; it does not create, update, or delete Dataverse rows. The package is written only after table files and SHA-256 checksums have been produced.
+
 ## Restore behavior
 
-Structure restore imports and publishes the saved unmanaged solution. This can recreate a missing custom table or column and reapply saved customizations. Solution import is additive and does not automatically delete extra schema components that were created after the snapshot.
+Before asking for confirmation, the application performs a no-write preflight. It verifies the package format, target environment, manifest/file consistency, SHA-256 checksums, table and record counts, unique IDs, supported value encoding, and that all selected tables occur in `solution.zip`. No solution is imported and no record is written if this preflight fails.
+
+Structure restore imports and publishes the **whole saved unmanaged solution**, not only the tables whose data was captured. This can recreate a missing custom table or column and reapply saved customizations. It can also overwrite customizations for components included in that solution. Solution import is additive and does not automatically delete extra schema components that were created after the snapshot.
 
 Data restore runs in two passes:
 
 1. Create missing records with their original primary GUIDs and align writable scalar values.
 2. Align lookups, owners, state, and status after referenced records are available.
 
-By default, records created after the snapshot are preserved. The optional **Delete records not present in the snapshot** setting enables strict record alignment and is intentionally off by default.
+Before data writes, the application confirms that each target table is an unmanaged custom table, its primary ID matches, and each restorable source column exists with a compatible type and writable target. A snapshot `null` clears the corresponding writable target value. Read-only system values, unsupported special values, and fields excluded with a warning are not recreated.
+
+By default, records created after the snapshot are preserved. The optional **Delete records not present in the snapshot** setting enables strict record alignment and is intentionally off by default. Deletions follow Dataverse relationship cascade behavior and can affect related tables.
+
+With **Create a safety snapshot before restore** selected, current data for source tables that already exist is captured before the restore begins. Current structure is also exported when the source snapshot includes a structure package. A table that does not yet exist has no current data to preserve.
+
+Restore is not a database transaction. Records are processed sequentially, failures are counted and processing continues, and cancellation or a PAC/import error can leave a partially applied restore. The tool does not provide an automatic rollback; use the safety snapshot for a deliberate follow-up recovery.
 
 Cross-environment restore is blocked. Mutating operations are limited to unmanaged custom tables.
 
@@ -69,3 +81,6 @@ dotnet build dataverse-table-backup-restore.slnx
 - Solution import restores missing or changed components but does not remove extra schema components.
 - The configured solution must contain the selected custom tables for a complete structure snapshot.
 - Record restore is intentionally sequential to make errors visible and reduce throttling risk; very large tables can take time.
+- The `.dvsnapshot` package is not encrypted. Protect it as a copy of the underlying business data.
+- Restore does not recreate audit history or guarantee immutable created/modified timestamps and users.
+- There is no cross-table ACID transaction or automatic rollback if a restore is interrupted.

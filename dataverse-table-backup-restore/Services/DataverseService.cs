@@ -256,7 +256,7 @@ public sealed class DataverseService : IDisposable
                 entity[attributeValue.Key] = sdkValue;
             }
 
-            if (entity.Attributes.Count == 0)
+            if (entity.Attributes.Count == 0 && (exists || referencePass))
             {
                 summary.Skipped++;
                 processed++;
@@ -312,7 +312,7 @@ public sealed class DataverseService : IDisposable
         return summary;
     }
 
-    public async Task<int> DeleteRecordsNotInSnapshotAsync(
+    public async Task<OperationSummary> DeleteRecordsNotInSnapshotAsync(
         TableSnapshot snapshot,
         IProgress<string>? progress,
         CancellationToken cancellationToken)
@@ -330,14 +330,14 @@ public sealed class DataverseService : IDisposable
         var extraIds = currentIds.Where(id => !snapshotIds.Contains(id)).ToList();
         if (extraIds.Count == 0)
         {
-            return 0;
+            return new OperationSummary();
         }
 
         progress?.Report($"Deleting {extraIds.Count:N0} records that are not present in the snapshot from {targetTable.LogicalName}...");
         return await DeleteRecordsAsync(targetTable, extraIds, progress, cancellationToken);
     }
 
-    public async Task<int> ClearTableDataAsync(
+    public async Task<OperationSummary> ClearTableDataAsync(
         DataverseTableInfo table,
         IProgress<string>? progress,
         CancellationToken cancellationToken)
@@ -357,6 +357,71 @@ public sealed class DataverseService : IDisposable
     {
         _allTables = [];
         await LoadTablesAsync(TableScope.All, progress, cancellationToken, forceRefresh: true);
+    }
+
+    public void ValidateRestoreTargets(IReadOnlyCollection<TableSnapshot> snapshots)
+    {
+        EnsureConnected();
+        foreach (var snapshot in snapshots)
+        {
+            var targetTable = _allTables.FirstOrDefault(table => string.Equals(
+                table.LogicalName,
+                snapshot.Schema.LogicalName,
+                StringComparison.OrdinalIgnoreCase));
+            if (targetTable is null)
+            {
+                throw new InvalidOperationException($"Restore target table '{snapshot.Schema.LogicalName}' does not exist.");
+            }
+
+            if (!targetTable.IsCustom)
+            {
+                throw new InvalidOperationException($"Restore target '{targetTable.LogicalName}' is not an unmanaged custom table.");
+            }
+
+            if (!string.Equals(
+                    targetTable.PrimaryIdAttribute,
+                    snapshot.Schema.PrimaryIdAttribute,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"Primary ID mismatch for '{targetTable.LogicalName}': snapshot '{snapshot.Schema.PrimaryIdAttribute}', target '{targetTable.PrimaryIdAttribute}'.");
+            }
+
+            var targetAttributes = targetTable.Metadata.Attributes
+                .Where(attribute => !string.IsNullOrWhiteSpace(attribute.LogicalName))
+                .ToDictionary(attribute => attribute.LogicalName, StringComparer.OrdinalIgnoreCase);
+            foreach (var snapshotAttribute in snapshot.Schema.Attributes.Where(attribute => attribute.IsRestorable))
+            {
+                if (!targetAttributes.TryGetValue(snapshotAttribute.LogicalName, out var targetAttribute))
+                {
+                    throw new InvalidOperationException(
+                        $"Restore target '{targetTable.LogicalName}' is missing attribute '{snapshotAttribute.LogicalName}'.");
+                }
+
+                var targetType = targetAttribute.AttributeTypeName?.Value
+                                 ?? targetAttribute.AttributeType?.ToString()
+                                 ?? "Unknown";
+                if (!string.Equals(targetType, snapshotAttribute.AttributeType, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException(
+                        $"Attribute type mismatch for '{targetTable.LogicalName}.{snapshotAttribute.LogicalName}': snapshot '{snapshotAttribute.AttributeType}', target '{targetType}'.");
+                }
+
+                if (targetAttribute.IsSecured == true ||
+                    targetAttribute.AttributeOf is not null ||
+                    targetAttribute.AttributeType == AttributeTypeCode.Virtual)
+                {
+                    throw new InvalidOperationException(
+                        $"Restore target attribute '{targetTable.LogicalName}.{snapshotAttribute.LogicalName}' is secured, derived, or virtual and cannot be aligned safely.");
+                }
+
+                if (targetAttribute.IsValidForCreate != true && targetAttribute.IsValidForUpdate != true)
+                {
+                    throw new InvalidOperationException(
+                        $"Restore target attribute '{targetTable.LogicalName}.{snapshotAttribute.LogicalName}' is not writable.");
+                }
+            }
+        }
     }
 
     public void Dispose()
@@ -463,13 +528,13 @@ public sealed class DataverseService : IDisposable
         return ids;
     }
 
-    private async Task<int> DeleteRecordsAsync(
+    private async Task<OperationSummary> DeleteRecordsAsync(
         DataverseTableInfo table,
         IReadOnlyCollection<Guid> ids,
         IProgress<string>? progress,
         CancellationToken cancellationToken)
     {
-        var deleted = 0;
+        var summary = new OperationSummary();
         foreach (var batch in ids.Chunk(200))
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -492,16 +557,17 @@ public sealed class DataverseService : IDisposable
                 cancellationToken);
 
             var failures = response.Responses.Count(item => item.Fault is not null);
-            deleted += batch.Length - failures;
+            summary.Deleted += batch.Length - failures;
+            summary.Failed += failures;
             foreach (var failure in response.Responses.Where(item => item.Fault is not null))
             {
                 progress?.Report($"Delete failed in {table.LogicalName}: {failure.Fault.Message}");
             }
 
-            progress?.Report($"{table.LogicalName}: deleted {deleted:N0}/{ids.Count:N0} records.");
+            progress?.Report($"{table.LogicalName}: deleted {summary.Deleted:N0}/{ids.Count:N0} records; failed {summary.Failed:N0}.");
         }
 
-        return deleted;
+        return summary;
     }
 
     private static bool IsSelectableTable(EntityMetadata metadata)

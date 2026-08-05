@@ -69,4 +69,12 @@ public sealed class SnapshotModelTests
         Assert.True(snapshot.IsUnsupported);
         Assert.Throws<NotSupportedException>(() => snapshot.ToSdkValue());
     }
+
+    [Fact]
+    public void InvalidBooleanSnapshotValueIsRejected()
+    {
+        var value = new SnapshotValue { Type = "Boolean", Value = "not-a-boolean" };
+
+        Assert.Throws<FormatException>(() => value.ToSdkValue());
+    }
 }
