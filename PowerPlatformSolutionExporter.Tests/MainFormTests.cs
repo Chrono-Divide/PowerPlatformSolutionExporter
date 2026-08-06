@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Text.RegularExpressions;
 using PowerPlatformSolutionExporter;
+using PowerPlatformSolutionExporter.Services;
 using Xunit;
 
 namespace PowerPlatformSolutionExporter.Tests;
@@ -14,8 +15,8 @@ public sealed class MainFormTests
         {
             using var form = new frmMain();
             Assert.Equal("frmMain", form.Name);
-            Assert.Equal(new Version(0, 0, 1, 0), typeof(frmMain).Assembly.GetName().Version);
-            Assert.Equal("Power Platform Solution Exporter v0.0.1", form.Text);
+            Assert.Equal(new Version(0, 0, 2, 0), typeof(frmMain).Assembly.GetName().Version);
+            Assert.Equal("Power Platform Solution Exporter v0.0.2", form.Text);
 
             var environmentList = FindControl<ComboBox>(form, "cboEnvironmentUrl");
             var userNameList = FindControl<ComboBox>(form, "cboUserName");
@@ -34,6 +35,54 @@ public sealed class MainFormTests
             Assert.DoesNotContain(allText, text => text.Contains("Restore Snapshot", StringComparison.OrdinalIgnoreCase));
             Assert.DoesNotContain(allText, text => text.Contains("Danger Zone", StringComparison.OrdinalIgnoreCase));
             Assert.DoesNotContain(allText, text => Regex.IsMatch(text, "[\\u3040-\\u30ff\\u3400-\\u9fff]"));
+        });
+    }
+
+    [Fact]
+    public void MainFormDefaultsAndRemembersTheExportFolder()
+    {
+        RunInSta(() =>
+        {
+            var testDirectory = Path.Combine(
+                Path.GetTempPath(),
+                "PowerPlatformSolutionExporterTests",
+                Guid.NewGuid().ToString("N"));
+            var settingsFile = Path.Combine(testDirectory, "app-settings.json");
+            var customExportFolder = Path.Combine(testDirectory, "RememberedExports");
+
+            try
+            {
+                using (var form = new frmMain(new AppSettingsStore(settingsFile))
+                       {
+                           StartPosition = FormStartPosition.Manual,
+                           Location = new Point(-4000, -4000),
+                       })
+                {
+                    var exportFolder = FindControl<TextBox>(form, "txtExportFolder");
+                    Assert.Equal(
+                        Path.Combine(
+                            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                            "PowerPlatformSolutionExports"),
+                        exportFolder.Text);
+
+                    form.Show();
+                    Application.DoEvents();
+                    exportFolder.Text = customExportFolder;
+                    form.Close();
+                }
+
+                using var reopenedForm = new frmMain(new AppSettingsStore(settingsFile));
+                Assert.Equal(
+                    customExportFolder,
+                    FindControl<TextBox>(reopenedForm, "txtExportFolder").Text);
+            }
+            finally
+            {
+                if (Directory.Exists(testDirectory))
+                {
+                    Directory.Delete(testDirectory, recursive: true);
+                }
+            }
         });
     }
 

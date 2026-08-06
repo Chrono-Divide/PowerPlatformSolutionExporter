@@ -8,6 +8,7 @@ public partial class frmMain : Form
 {
     private readonly DataverseService _dataverseService = new();
     private readonly ConnectionProfileStore _connectionProfileStore = new();
+    private readonly AppSettingsStore _appSettingsStore;
     private readonly BindingList<TableGridRow> _tableRows = [];
     private IReadOnlyList<ConnectionProfile> _connectionProfiles = [];
     private SolutionOverview? _solutionOverview;
@@ -17,14 +18,21 @@ public partial class frmMain : Form
     private bool _loadingSolutions;
 
     public frmMain()
+        : this(new AppSettingsStore())
     {
+    }
+
+    public frmMain(AppSettingsStore appSettingsStore)
+    {
+        _appSettingsStore = appSettingsStore ?? throw new ArgumentNullException(nameof(appSettingsStore));
         InitializeComponent();
         Text = $"{Text} v{GetApplicationVersion()}";
         dgvTables.AutoGenerateColumns = false;
         dgvTables.DataSource = _tableRows;
-        txtExportFolder.Text = Path.Combine(
+        var defaultExportFolder = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
             "PowerPlatformSolutionExports");
+        txtExportFolder.Text = _appSettingsStore.LoadExportFolder(defaultExportFolder);
         LoadConnectionProfiles();
         UpdateActionState();
     }
@@ -115,6 +123,7 @@ public partial class frmMain : Form
         if (dialog.ShowDialog(this) == DialogResult.OK)
         {
             txtExportFolder.Text = dialog.SelectedPath;
+            SaveExportFolderSetting(showError: true);
         }
     }
 
@@ -131,6 +140,8 @@ public partial class frmMain : Form
             MessageBox.Show(this, "Choose an export folder.", "Folder Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             return;
         }
+
+        SaveExportFolderSetting(showError: true);
 
         var nextVersion = SolutionVersion.IncrementRevision(solution.Version);
         var confirmation = MessageBox.Show(
@@ -479,8 +490,29 @@ public partial class frmMain : Form
         MessageBox.Show(this, string.Join(Environment.NewLine, messages), title, MessageBoxButtons.OK, MessageBoxIcon.Error);
     }
 
+    private void SaveExportFolderSetting(bool showError)
+    {
+        if (string.IsNullOrWhiteSpace(txtExportFolder.Text))
+        {
+            return;
+        }
+
+        try
+        {
+            _appSettingsStore.SaveExportFolder(txtExportFolder.Text);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            if (showError)
+            {
+                ShowError("Unable to save the export folder", exception);
+            }
+        }
+    }
+
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
+        SaveExportFolderSetting(showError: false);
         _operationCancellation?.Cancel();
         _dataverseService.Dispose();
         base.OnFormClosed(e);

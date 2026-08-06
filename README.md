@@ -58,6 +58,12 @@ Environment URL and user name are editable drop-down lists. Profiles are stored 
 
 Only the environment URL, user-name hint, and last-used timestamp are stored. Passwords and access tokens are not written to the profile. Existing profiles and the MSAL cache are migrated on first use from the legacy `%LocalAppData%\DataverseSolutionExporter` or `%LocalAppData%\DataverseSnapshotManager` directory.
 
+The first launch uses `%UserProfile%\Documents\PowerPlatformSolutionExports` as the export folder. After it is changed, the last non-empty folder is restored from the separate settings file in the same local directory:
+
+```text
+%LocalAppData%\PowerPlatformSolutionExporter\app-settings.json
+```
+
 ## Requirements
 
 - Windows with the .NET 10 Desktop Runtime, or the .NET 10 SDK for building.
