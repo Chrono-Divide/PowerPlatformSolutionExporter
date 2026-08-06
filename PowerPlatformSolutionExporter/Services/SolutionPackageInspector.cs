@@ -2,7 +2,7 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Xml.Linq;
 
-namespace dataverse_solution_exporter.Services;
+namespace PowerPlatformSolutionExporter.Services;
 
 public sealed class SolutionPackageInspector
 {

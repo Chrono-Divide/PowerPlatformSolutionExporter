@@ -27,5 +27,5 @@ packages/
 # Legacy snapshot packages and exported solution artifacts
 *.dvsnapshot
 DataverseSnapshots/
-DataverseSolutionExports/
+PowerPlatformSolutionExports/
 *_unmanaged_*.zip

@@ -1,16 +1,16 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.ServiceModel;
-using dataverse_solution_exporter.Models;
+using PowerPlatformSolutionExporter.Models;
 using Microsoft.Crm.Sdk.Messages;
 using Microsoft.PowerPlatform.Dataverse.Client;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Messages;
 using Microsoft.Xrm.Sdk.Metadata;
 using Microsoft.Xrm.Sdk.Query;
-using SolutionInfo = dataverse_solution_exporter.Models.SolutionInfo;
+using SolutionInfo = PowerPlatformSolutionExporter.Models.SolutionInfo;
 
-namespace dataverse_solution_exporter.Services;
+namespace PowerPlatformSolutionExporter.Services;
 
 public sealed class DataverseService : IDisposable
 {

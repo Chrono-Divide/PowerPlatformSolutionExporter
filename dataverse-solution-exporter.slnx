@@ -1,4 +1,0 @@
-<Solution>
-  <Project Path="dataverse-solution-exporter/dataverse-solution-exporter.csproj" />
-  <Project Path="dataverse-solution-exporter.Tests/dataverse-solution-exporter.Tests.csproj" />
-</Solution>

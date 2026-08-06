@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\dataverse-solution-exporter\dataverse-solution-exporter.csproj" />
+    <ProjectReference Include="..\PowerPlatformSolutionExporter\PowerPlatformSolutionExporter.csproj" />
   </ItemGroup>
 
   <ItemGroup>

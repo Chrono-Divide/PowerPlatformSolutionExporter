@@ -1,6 +1,6 @@
 #nullable disable
 
-namespace dataverse_solution_exporter;
+namespace PowerPlatformSolutionExporter;
 
 partial class frmTableViewer
 {

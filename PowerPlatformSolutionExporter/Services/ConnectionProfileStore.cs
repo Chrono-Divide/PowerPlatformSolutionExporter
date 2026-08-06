@@ -1,7 +1,7 @@
 using System.Text.Json;
-using dataverse_solution_exporter.Models;
+using PowerPlatformSolutionExporter.Models;
 
-namespace dataverse_solution_exporter.Services;
+namespace PowerPlatformSolutionExporter.Services;
 
 public sealed class ConnectionProfileStore
 {

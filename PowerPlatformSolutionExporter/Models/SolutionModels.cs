@@ -1,6 +1,6 @@
 using Microsoft.Xrm.Sdk.Metadata;
 
-namespace dataverse_solution_exporter.Models;
+namespace PowerPlatformSolutionExporter.Models;
 
 public sealed class SolutionInfo
 {

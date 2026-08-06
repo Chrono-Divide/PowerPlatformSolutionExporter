@@ -1,7 +1,7 @@
-using dataverse_solution_exporter.Models;
-using dataverse_solution_exporter.Services;
+using PowerPlatformSolutionExporter.Models;
+using PowerPlatformSolutionExporter.Services;
 
-namespace dataverse_solution_exporter;
+namespace PowerPlatformSolutionExporter;
 
 public partial class frmTableViewer : Form
 {

@@ -1,8 +1,8 @@
 using System.Text.RegularExpressions;
-using dataverse_solution_exporter;
+using PowerPlatformSolutionExporter;
 using Xunit;
 
-namespace dataverse_solution_exporter.Tests;
+namespace PowerPlatformSolutionExporter.Tests;
 
 public sealed class MainFormTests
 {
@@ -13,7 +13,7 @@ public sealed class MainFormTests
         {
             using var form = new frmMain();
             Assert.Equal("frmMain", form.Name);
-            Assert.Equal("Dataverse Solution Exporter", form.Text);
+            Assert.Equal("Power Platform Solution Exporter", form.Text);
 
             var environmentList = FindControl<ComboBox>(form, "cboEnvironmentUrl");
             var userNameList = FindControl<ComboBox>(form, "cboUserName");
@@ -50,7 +50,7 @@ public sealed class MainFormTests
 
             using var bitmap = new Bitmap(form.Width, form.Height);
             form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
-            var outputDirectory = Path.Combine(Path.GetTempPath(), "DataverseSolutionExporterTests");
+            var outputDirectory = Path.Combine(Path.GetTempPath(), "PowerPlatformSolutionExporterTests");
             Directory.CreateDirectory(outputDirectory);
             bitmap.Save(Path.Combine(outputDirectory, "frmMain.png"));
             Assert.True(bitmap.Width >= 1100);

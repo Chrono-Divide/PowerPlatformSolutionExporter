@@ -1,6 +1,6 @@
 #nullable disable
 
-namespace dataverse_solution_exporter;
+namespace PowerPlatformSolutionExporter;
 
 partial class frmMain
 {
@@ -152,7 +152,7 @@ partial class frmMain
         lblTitle.Font = new Font("Segoe UI", 18F, FontStyle.Bold);
         lblTitle.ForeColor = Color.White;
         lblTitle.Location = new Point(22, 10);
-        lblTitle.Text = "Dataverse Solution Exporter";
+        lblTitle.Text = "Power Platform Solution Exporter";
         // lblSubtitle
         lblSubtitle.AutoSize = true;
         lblSubtitle.ForeColor = Color.WhiteSmoke;
@@ -406,7 +406,7 @@ partial class frmMain
         MinimumSize = new Size(1120, 720);
         Name = "frmMain";
         StartPosition = FormStartPosition.CenterScreen;
-        Text = "Dataverse Solution Exporter";
+        Text = "Power Platform Solution Exporter";
         layoutRoot.ResumeLayout(false);
         pnlHeader.ResumeLayout(false);
         pnlHeader.PerformLayout();

@@ -1,6 +1,6 @@
-# Dataverse Solution Exporter
+# Power Platform Solution Exporter
 
-A Windows Forms utility for publishing server-saved Dataverse customizations, incrementing an unmanaged Solution revision, exporting the Solution as an unmanaged ZIP, and inspecting the tables included in the Solution.
+A Windows Forms utility for publishing server-saved Power Platform customizations, incrementing an unmanaged solution revision, exporting the solution as an unmanaged ZIP, and inspecting its included Dataverse tables.
 
 The main window remains named `frmMain`, and all UI text is English. Snapshot restore and destructive table-data operations have been removed.
 
@@ -47,10 +47,10 @@ The inspector never creates, updates, or deletes records.
 Environment URL and user name are editable drop-down lists. Profiles are stored in:
 
 ```text
-%LocalAppData%\DataverseSolutionExporter\connection-profiles.json
+%LocalAppData%\PowerPlatformSolutionExporter\connection-profiles.json
 ```
 
-Only the environment URL, user-name hint, and last-used timestamp are stored. Passwords and access tokens are not written to the profile. Existing profiles and the MSAL cache are migrated on first use from the legacy `%LocalAppData%\DataverseSnapshotManager` directory.
+Only the environment URL, user-name hint, and last-used timestamp are stored. Passwords and access tokens are not written to the profile. Existing profiles and the MSAL cache are migrated on first use from the legacy `%LocalAppData%\DataverseSolutionExporter` or `%LocalAppData%\DataverseSnapshotManager` directory.
 
 ## Requirements
 
@@ -62,8 +62,8 @@ Only the environment URL, user-name hint, and last-used timestamp are stored. Pa
 ## Build and test
 
 ```powershell
-dotnet build dataverse-solution-exporter.slnx
-dotnet test dataverse-solution-exporter.slnx
+dotnet build PowerPlatformSolutionExporter.slnx
+dotnet test PowerPlatformSolutionExporter.slnx
 ```
 
 ## Safety notes

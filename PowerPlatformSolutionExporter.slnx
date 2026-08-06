@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="PowerPlatformSolutionExporter/PowerPlatformSolutionExporter.csproj" />
+  <Project Path="PowerPlatformSolutionExporter.Tests/PowerPlatformSolutionExporter.Tests.csproj" />
+</Solution>

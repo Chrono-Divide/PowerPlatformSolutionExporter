@@ -1,10 +1,10 @@
-using dataverse_solution_exporter.Models;
-using dataverse_solution_exporter.Services;
+using PowerPlatformSolutionExporter.Models;
+using PowerPlatformSolutionExporter.Services;
 using Microsoft.Xrm.Sdk;
 using Microsoft.Xrm.Sdk.Metadata;
 using Xunit;
 
-namespace dataverse_solution_exporter.Tests;
+namespace PowerPlatformSolutionExporter.Tests;
 
 public sealed class TableViewerTests
 {

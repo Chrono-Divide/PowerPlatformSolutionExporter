@@ -1,10 +1,10 @@
 using System.IO.Compression;
-using dataverse_solution_exporter.Models;
-using dataverse_solution_exporter.Services;
+using PowerPlatformSolutionExporter.Models;
+using PowerPlatformSolutionExporter.Services;
 using Microsoft.Xrm.Sdk;
 using Xunit;
 
-namespace dataverse_solution_exporter.Tests;
+namespace PowerPlatformSolutionExporter.Tests;
 
 public sealed class SolutionExportTests
 {
@@ -26,7 +26,7 @@ public sealed class SolutionExportTests
     [Fact]
     public void InspectorReadsAndVerifiesUnmanagedPackageIdentity()
     {
-        var testDirectory = Path.Combine(Path.GetTempPath(), "DataverseSolutionExporterTests", Guid.NewGuid().ToString("N"));
+        var testDirectory = Path.Combine(Path.GetTempPath(), "PowerPlatformSolutionExporterTests", Guid.NewGuid().ToString("N"));
         var packagePath = Path.Combine(testDirectory, "solution.zip");
         Directory.CreateDirectory(testDirectory);
         try

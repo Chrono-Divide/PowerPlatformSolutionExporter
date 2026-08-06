@@ -1,8 +1,8 @@
 using System.ComponentModel;
-using dataverse_solution_exporter.Models;
-using dataverse_solution_exporter.Services;
+using PowerPlatformSolutionExporter.Models;
+using PowerPlatformSolutionExporter.Services;
 
-namespace dataverse_solution_exporter;
+namespace PowerPlatformSolutionExporter;
 
 public partial class frmMain : Form
 {
@@ -23,7 +23,7 @@ public partial class frmMain : Form
         dgvTables.DataSource = _tableRows;
         txtExportFolder.Text = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-            "DataverseSolutionExports");
+            "PowerPlatformSolutionExports");
         LoadConnectionProfiles();
         UpdateActionState();
     }

@@ -1,4 +1,4 @@
-namespace dataverse_solution_exporter
+namespace PowerPlatformSolutionExporter
 {
     internal static class Program
     {
