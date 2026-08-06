@@ -150,6 +150,21 @@ public sealed class TableViewerTests
             populateData.Invoke(form, [page]);
 
             Assert.Equal(
+                DataGridViewClipboardCopyMode.EnableWithoutHeaderText,
+                dataGrid.ClipboardCopyMode);
+            dataGrid.ClearSelection();
+            var guidCell = dataGrid.Rows[0].Cells[dataGrid.Columns["new_sampleid"]!.Index];
+            guidCell.Selected = true;
+
+            var clipboardData = dataGrid.GetClipboardContent();
+            Assert.NotNull(clipboardData);
+            Assert.True(clipboardData.TryGetData<string>(DataFormats.UnicodeText, out var copiedText));
+            Assert.NotNull(copiedText);
+            Assert.Equal(Guid.Empty.ToString(), copiedText.TrimEnd('\r', '\n'));
+            Assert.DoesNotContain("new_sampleid", copiedText, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("UniqueidentifierType", copiedText, StringComparison.OrdinalIgnoreCase);
+
+            Assert.Equal(
                 ["new_sampleid", "new_name", "new_customvalue", "new_customvaluename", "utcconversiontimezonecode"],
                 dataGrid.Columns.Cast<DataGridViewColumn>().Select(column => column.Name));
             Assert.Equal(DataGridViewColumnHeadersHeightSizeMode.AutoSize, dataGrid.ColumnHeadersHeightSizeMode);

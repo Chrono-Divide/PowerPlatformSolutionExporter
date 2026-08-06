@@ -128,7 +128,7 @@ partial class frmTableViewer
         dgvData.AllowUserToOrderColumns = true;
         dgvData.AllowUserToResizeRows = false;
         dgvData.BackgroundColor = Color.White;
-        dgvData.ClipboardCopyMode = DataGridViewClipboardCopyMode.EnableAlwaysIncludeHeaderText;
+        dgvData.ClipboardCopyMode = DataGridViewClipboardCopyMode.EnableWithoutHeaderText;
         dgvData.ColumnHeadersDefaultCellStyle.WrapMode = DataGridViewTriState.True;
         dgvData.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
         dgvData.Dock = DockStyle.Fill;

@@ -44,7 +44,7 @@ For the columns each tab displays, both keep the primary record GUID first, then
 
 Click a header in **Columns and data types** to sort the column definitions ascending or descending while the primary GUID remains pinned first. Click a header in **Record data (read-only)** to sort through Dataverse across the complete table, reset paging to page 1, and use the primary GUID as a stable secondary order.
 
-The inspector never creates, updates, or deletes records.
+Record cells remain selectable and copyable, and clipboard output contains only the selected cell values without column headers. The inspector never creates, updates, or deletes records.
 
 ## Saved connections
 
