@@ -5,6 +5,9 @@ namespace PowerPlatformSolutionExporter;
 
 public partial class frmTableViewer : Form
 {
+    private static readonly Color GeneratedColumnBackColor = Color.FromArgb(255, 247, 218);
+    private static readonly Color GeneratedColumnHeaderBackColor = Color.FromArgb(246, 225, 163);
+    private static readonly Color GeneratedColumnSelectionBackColor = Color.FromArgb(240, 213, 138);
     private static readonly Color BuiltInColumnBackColor = Color.FromArgb(235, 242, 248);
     private static readonly Color BuiltInColumnHeaderBackColor = Color.FromArgb(211, 225, 237);
     private static readonly Color BuiltInColumnSelectionBackColor = Color.FromArgb(190, 214, 233);
@@ -14,8 +17,13 @@ public partial class frmTableViewer : Form
 
     private readonly DataverseService _dataverseService;
     private readonly DataverseTableInfo _table;
+    private readonly IReadOnlyList<TableColumnInfo> _tableColumns;
     private readonly List<string?> _pageStartCookies = [null];
     private CancellationTokenSource? _loadCancellation;
+    private int? _metadataSortColumnIndex;
+    private bool _metadataSortAscending = true;
+    private string _dataSortLogicalName;
+    private bool _dataSortAscending = true;
     private int _currentPage = 1;
     private bool _busy;
 
@@ -23,6 +31,8 @@ public partial class frmTableViewer : Form
     {
         _dataverseService = dataverseService;
         _table = table;
+        _tableColumns = _dataverseService.GetTableColumns(_table);
+        _dataSortLogicalName = table.PrimaryIdAttribute;
         InitializeComponent();
         Text = $"{table.DisplayName} - Table Inspector";
         lblTableTitle.Text = table.DisplayName;
@@ -33,13 +43,14 @@ public partial class frmTableViewer : Form
     private void PopulateColumns()
     {
         dgvColumns.Rows.Clear();
-        var columns = _dataverseService.GetTableColumns(_table);
+        var columns = GetMetadataDisplayColumns();
         foreach (var column in columns)
         {
             var rowIndex = dgvColumns.Rows.Add(
                 column.DisplayName,
                 column.LogicalName,
                 column.SchemaName,
+                column.OriginDisplayName,
                 column.DataType,
                 column.Details,
                 column.RequiredLevel,
@@ -50,16 +61,16 @@ public partial class frmTableViewer : Form
                 column.IsValidForUpdate ? "Yes" : "No");
             var row = dgvColumns.Rows[rowIndex];
             row.Tag = column;
-            if (!column.IsCustomAttribute)
-            {
-                ApplyBuiltInStyle(row.DefaultCellStyle);
-            }
+            ApplyOriginStyle(row.DefaultCellStyle, column.Origin);
         }
 
-        var customCount = columns.Count(column => column.IsCustomAttribute);
-        var builtInCount = columns.Count - customCount;
-        lblColumnSummary.Text = $"{columns.Count:N0} columns  |  {customCount:N0} custom  |  {builtInCount:N0} Dataverse built-in (shaded)";
+        var customCount = _tableColumns.Count(column => column.Origin == DataverseColumnOrigin.Custom);
+        var generatedCount = _tableColumns.Count(column => column.Origin == DataverseColumnOrigin.DataverseGenerated);
+        var systemCount = _tableColumns.Count(column => column.Origin == DataverseColumnOrigin.DataverseSystem);
+        lblColumnSummary.Text = $"{_tableColumns.Count:N0} columns  |  {customCount:N0} custom  |  " +
+                                $"{generatedCount:N0} generated (yellow)  |  {systemCount:N0} system (blue)  |  Click a header to sort";
         ResizeMetadataColumns();
+        UpdateMetadataSortGlyph();
     }
 
     private async void frmTableViewer_Shown(object? sender, EventArgs e)
@@ -133,7 +144,9 @@ public partial class frmTableViewer : Form
                 pageNumber,
                 Decimal.ToInt32(numPageSize.Value),
                 _pageStartCookies[pageNumber - 1],
-                _loadCancellation.Token);
+                _loadCancellation.Token,
+                _dataSortLogicalName,
+                _dataSortAscending);
             _currentPage = page.PageNumber;
             if (page.HasMoreRecords && !string.IsNullOrWhiteSpace(page.NextPagingCookie))
             {
@@ -183,21 +196,23 @@ public partial class frmTableViewer : Form
             foreach (var column in page.Columns)
             {
                 var headerText = $"{column.DisplayName}\n{column.LogicalName} · {column.DataType}";
+                var tooltipText = $"{headerText}\nOrigin: {column.OriginDisplayName}";
                 var dataColumn = new DataGridViewTextBoxColumn
                 {
                     Name = column.LogicalName,
                     HeaderText = headerText,
                     MinimumWidth = column.IsPrimaryId ? PrimaryIdColumnMinimumWidth : StandardDataColumnMinimumWidth,
                     Width = CalculateDataColumnWidth(column),
-                    SortMode = DataGridViewColumnSortMode.NotSortable,
+                    SortMode = DataGridViewColumnSortMode.Programmatic,
                     Tag = column,
-                    ToolTipText = headerText,
+                    ToolTipText = tooltipText,
                 };
-                dataColumn.HeaderCell.ToolTipText = headerText;
-                if (!column.IsCustomAttribute)
+                dataColumn.HeaderCell.ToolTipText = tooltipText;
+                ApplyOriginStyle(dataColumn.DefaultCellStyle, column.Origin);
+                var headerBackColor = GetOriginHeaderBackColor(column.Origin);
+                if (headerBackColor.HasValue)
                 {
-                    ApplyBuiltInStyle(dataColumn.DefaultCellStyle);
-                    dataColumn.HeaderCell.Style.BackColor = BuiltInColumnHeaderBackColor;
+                    dataColumn.HeaderCell.Style.BackColor = headerBackColor.Value;
                     dataColumn.HeaderCell.Style.ForeColor = Color.Black;
                 }
 
@@ -212,11 +227,124 @@ public partial class frmTableViewer : Form
                     .ToArray());
             }
 
+            UpdateDataSortGlyph();
             dgvData.AutoResizeColumnHeadersHeight();
         }
         finally
         {
             dgvData.ResumeLayout();
+        }
+    }
+
+    private IReadOnlyList<TableColumnInfo> GetMetadataDisplayColumns()
+    {
+        if (!_metadataSortColumnIndex.HasValue)
+        {
+            return _tableColumns;
+        }
+
+        var primaryIdColumns = _tableColumns.Where(column => column.IsPrimaryId);
+        var remainingColumns = _tableColumns.Where(column => !column.IsPrimaryId);
+        Func<TableColumnInfo, string> selector = column => GetMetadataSortValue(
+            column,
+            _metadataSortColumnIndex.Value);
+        remainingColumns = _metadataSortAscending
+            ? remainingColumns.OrderBy(selector, StringComparer.CurrentCultureIgnoreCase)
+            : remainingColumns.OrderByDescending(selector, StringComparer.CurrentCultureIgnoreCase);
+        return primaryIdColumns
+            .Concat(remainingColumns)
+            .ToList();
+    }
+
+    private static string GetMetadataSortValue(TableColumnInfo column, int columnIndex)
+    {
+        return columnIndex switch
+        {
+            0 => column.DisplayName,
+            1 => column.LogicalName,
+            2 => column.SchemaName,
+            3 => column.OriginDisplayName,
+            4 => column.DataType,
+            5 => column.Details,
+            6 => column.RequiredLevel,
+            7 => column.IsPrimaryId ? "Yes" : string.Empty,
+            8 => column.IsPrimaryName ? "Yes" : string.Empty,
+            9 => column.IsValidForRead ? "Yes" : "No",
+            10 => column.IsValidForCreate ? "Yes" : "No",
+            11 => column.IsValidForUpdate ? "Yes" : "No",
+            _ => column.DisplayName,
+        };
+    }
+
+    private void dgvColumns_ColumnHeaderMouseClick(object? sender, DataGridViewCellMouseEventArgs e)
+    {
+        if (e.Button != MouseButtons.Left || e.ColumnIndex < 0)
+        {
+            return;
+        }
+
+        if (_metadataSortColumnIndex == e.ColumnIndex)
+        {
+            _metadataSortAscending = !_metadataSortAscending;
+        }
+        else
+        {
+            _metadataSortColumnIndex = e.ColumnIndex;
+            _metadataSortAscending = true;
+        }
+
+        PopulateColumns();
+    }
+
+    private async void dgvData_ColumnHeaderMouseClick(object? sender, DataGridViewCellMouseEventArgs e)
+    {
+        if (_busy || e.Button != MouseButtons.Left || e.ColumnIndex < 0 ||
+            dgvData.Columns[e.ColumnIndex].Tag is not TableColumnInfo column)
+        {
+            return;
+        }
+
+        ToggleDataSort(column);
+        await LoadPageAsync(1, resetPaging: true);
+    }
+
+    private void ToggleDataSort(TableColumnInfo column)
+    {
+        if (string.Equals(_dataSortLogicalName, column.LogicalName, StringComparison.OrdinalIgnoreCase))
+        {
+            _dataSortAscending = !_dataSortAscending;
+        }
+        else
+        {
+            _dataSortLogicalName = column.LogicalName;
+            _dataSortAscending = true;
+        }
+    }
+
+    private void UpdateMetadataSortGlyph()
+    {
+        foreach (DataGridViewColumn column in dgvColumns.Columns)
+        {
+            column.HeaderCell.SortGlyphDirection = SortOrder.None;
+        }
+
+        if (_metadataSortColumnIndex.HasValue)
+        {
+            dgvColumns.Columns[_metadataSortColumnIndex.Value].HeaderCell.SortGlyphDirection =
+                _metadataSortAscending ? SortOrder.Ascending : SortOrder.Descending;
+        }
+    }
+
+    private void UpdateDataSortGlyph()
+    {
+        foreach (DataGridViewColumn column in dgvData.Columns)
+        {
+            column.HeaderCell.SortGlyphDirection = string.Equals(
+                column.Name,
+                _dataSortLogicalName,
+                StringComparison.OrdinalIgnoreCase)
+                ? (_dataSortAscending ? SortOrder.Ascending : SortOrder.Descending)
+                : SortOrder.None;
         }
     }
 
@@ -236,12 +364,14 @@ public partial class frmTableViewer : Form
             var minimumWidth = column.Name switch
             {
                 "DisplayName" or "LogicalName" or "SchemaName" => 180,
+                "Origin" => 150,
                 "DataType" or "Details" => 140,
                 _ => 80,
             };
             var maximumWidth = column.Name switch
             {
                 "DisplayName" or "LogicalName" or "SchemaName" => MaximumDataColumnWidth,
+                "Origin" => 190,
                 "Details" => 400,
                 "DataType" => 240,
                 _ => 140,
@@ -271,12 +401,35 @@ public partial class frmTableViewer : Form
         }
     }
 
-    private static void ApplyBuiltInStyle(DataGridViewCellStyle style)
+    private static void ApplyOriginStyle(DataGridViewCellStyle style, DataverseColumnOrigin origin)
     {
-        style.BackColor = BuiltInColumnBackColor;
+        var colors = origin switch
+        {
+            DataverseColumnOrigin.DataverseGenerated =>
+                (GeneratedColumnBackColor, GeneratedColumnSelectionBackColor),
+            DataverseColumnOrigin.DataverseSystem =>
+                (BuiltInColumnBackColor, BuiltInColumnSelectionBackColor),
+            _ => ((Color BackColor, Color SelectionBackColor)?)null,
+        };
+        if (!colors.HasValue)
+        {
+            return;
+        }
+
+        style.BackColor = colors.Value.BackColor;
         style.ForeColor = Color.Black;
-        style.SelectionBackColor = BuiltInColumnSelectionBackColor;
+        style.SelectionBackColor = colors.Value.SelectionBackColor;
         style.SelectionForeColor = Color.Black;
+    }
+
+    private static Color? GetOriginHeaderBackColor(DataverseColumnOrigin origin)
+    {
+        return origin switch
+        {
+            DataverseColumnOrigin.DataverseGenerated => GeneratedColumnHeaderBackColor,
+            DataverseColumnOrigin.DataverseSystem => BuiltInColumnHeaderBackColor,
+            _ => null,
+        };
     }
 
     private void UpdateDataControls()

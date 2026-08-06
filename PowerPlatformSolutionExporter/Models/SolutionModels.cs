@@ -47,6 +47,13 @@ public sealed class CanvasAppPublishStatus
                                (!LastModifiedTime.HasValue || LastPublishTime.Value >= LastModifiedTime.Value);
 }
 
+public enum DataverseColumnOrigin
+{
+    Custom,
+    DataverseGenerated,
+    DataverseSystem,
+}
+
 public sealed class TableColumnInfo
 {
     public required string DisplayName { get; init; }
@@ -58,9 +65,18 @@ public sealed class TableColumnInfo
     public bool IsPrimaryId { get; init; }
     public bool IsPrimaryName { get; init; }
     public bool IsCustomAttribute { get; init; }
+    public required DataverseColumnOrigin Origin { get; init; }
     public bool IsValidForRead { get; init; }
     public bool IsValidForCreate { get; init; }
     public bool IsValidForUpdate { get; init; }
+
+    public string OriginDisplayName => Origin switch
+    {
+        DataverseColumnOrigin.Custom => "Custom",
+        DataverseColumnOrigin.DataverseGenerated => "Dataverse generated",
+        DataverseColumnOrigin.DataverseSystem => "Dataverse system",
+        _ => Origin.ToString(),
+    };
 }
 
 public sealed class TableDataPage

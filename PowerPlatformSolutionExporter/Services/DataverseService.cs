@@ -272,12 +272,13 @@ public sealed class DataverseService : IDisposable
                 IsPrimaryId = attribute.IsPrimaryId == true,
                 IsPrimaryName = attribute.IsPrimaryName == true,
                 IsCustomAttribute = attribute.IsCustomAttribute == true,
+                Origin = GetColumnOrigin(attribute),
                 IsValidForRead = attribute.IsValidForRead == true,
                 IsValidForCreate = attribute.IsValidForCreate == true,
                 IsValidForUpdate = attribute.IsValidForUpdate == true,
             })
             .OrderByDescending(column => column.IsPrimaryId)
-            .ThenByDescending(column => column.IsCustomAttribute)
+            .ThenBy(column => column.Origin)
             .ThenByDescending(column => column.IsPrimaryName)
             .ThenBy(column => column.DisplayName, StringComparer.CurrentCultureIgnoreCase)
             .ThenBy(column => column.LogicalName, StringComparer.OrdinalIgnoreCase)
@@ -289,7 +290,9 @@ public sealed class DataverseService : IDisposable
         int pageNumber,
         int pageSize,
         string? pagingCookie,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? sortLogicalName = null,
+        bool sortAscending = true)
     {
         EnsureConnected();
         if (pageNumber < 1)
@@ -330,7 +333,7 @@ public sealed class DataverseService : IDisposable
                 ReturnTotalRecordCount = false,
             },
         };
-        query.Orders.Add(new OrderExpression(table.PrimaryIdAttribute, OrderType.Ascending));
+        ApplyTableDataOrdering(query, previewColumns, table.PrimaryIdAttribute, sortLogicalName, sortAscending);
         var page = await Task.Run(() => _client!.RetrieveMultiple(query), cancellationToken);
         var rows = page.Entities.Select(entity =>
         {
@@ -365,6 +368,32 @@ public sealed class DataverseService : IDisposable
             HasMoreRecords = page.MoreRecords,
             NextPagingCookie = page.PagingCookie,
         };
+    }
+
+    private static void ApplyTableDataOrdering(
+        QueryExpression query,
+        IReadOnlyList<TableColumnInfo> previewColumns,
+        string primaryIdAttribute,
+        string? sortLogicalName,
+        bool sortAscending)
+    {
+        var sortColumn = previewColumns.FirstOrDefault(column =>
+                             string.Equals(column.LogicalName, sortLogicalName, StringComparison.OrdinalIgnoreCase))
+                         ?? previewColumns.FirstOrDefault(column => column.IsPrimaryId);
+        if (sortColumn is not null)
+        {
+            query.Orders.Add(new OrderExpression(
+                sortColumn.LogicalName,
+                sortAscending ? OrderType.Ascending : OrderType.Descending));
+        }
+
+        if (sortColumn is null || !string.Equals(
+                sortColumn.LogicalName,
+                primaryIdAttribute,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            query.Orders.Add(new OrderExpression(primaryIdAttribute, OrderType.Ascending));
+        }
     }
 
     public static string? FormatSdkValue(object? value)
@@ -558,7 +587,19 @@ public sealed class DataverseService : IDisposable
                    not AttributeTypeCode.PartyList and
                    not AttributeTypeCode.EntityName &&
                !string.Equals(attribute.AttributeTypeName?.Value, "FileType", StringComparison.OrdinalIgnoreCase) &&
-               !string.Equals(attribute.AttributeTypeName?.Value, "ImageType", StringComparison.OrdinalIgnoreCase);
+                   !string.Equals(attribute.AttributeTypeName?.Value, "ImageType", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static DataverseColumnOrigin GetColumnOrigin(AttributeMetadata attribute)
+    {
+        if (attribute.IsPrimaryId == true || !string.IsNullOrWhiteSpace(attribute.AttributeOf))
+        {
+            return DataverseColumnOrigin.DataverseGenerated;
+        }
+
+        return attribute.IsCustomAttribute == true
+            ? DataverseColumnOrigin.Custom
+            : DataverseColumnOrigin.DataverseSystem;
     }
 
     private static string GetAttributeDetails(AttributeMetadata attribute)

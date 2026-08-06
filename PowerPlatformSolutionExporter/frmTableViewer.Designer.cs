@@ -99,6 +99,7 @@ partial class frmTableViewer
         dgvColumns.Columns.Add("DisplayName", "Display name");
         dgvColumns.Columns.Add("LogicalName", "Logical name");
         dgvColumns.Columns.Add("SchemaName", "Schema name");
+        dgvColumns.Columns.Add("Origin", "Origin");
         dgvColumns.Columns.Add("DataType", "Data type");
         dgvColumns.Columns.Add("Details", "Type details");
         dgvColumns.Columns.Add("Required", "Required");
@@ -107,6 +108,11 @@ partial class frmTableViewer
         dgvColumns.Columns.Add("Read", "Read");
         dgvColumns.Columns.Add("Create", "Create");
         dgvColumns.Columns.Add("Update", "Update");
+        foreach (DataGridViewColumn column in dgvColumns.Columns)
+        {
+            column.SortMode = DataGridViewColumnSortMode.Programmatic;
+        }
+        dgvColumns.ColumnHeaderMouseClick += dgvColumns_ColumnHeaderMouseClick;
         lblColumnSummary.Dock = DockStyle.Bottom;
         lblColumnSummary.Height = 28;
         lblColumnSummary.Padding = new Padding(4, 6, 0, 0);
@@ -132,6 +138,7 @@ partial class frmTableViewer
         dgvData.RowHeadersVisible = false;
         dgvData.SelectionMode = DataGridViewSelectionMode.CellSelect;
         dgvData.ShowCellToolTips = true;
+        dgvData.ColumnHeaderMouseClick += dgvData_ColumnHeaderMouseClick;
         // toolbar
         pnlDataToolbar.Controls.Add(lblPageSize);
         pnlDataToolbar.Controls.Add(numPageSize);

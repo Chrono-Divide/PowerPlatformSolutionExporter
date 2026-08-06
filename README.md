@@ -40,7 +40,9 @@ Double-click a table to open the read-only inspector:
 - **Columns and data types** shows display, logical and schema names, Dataverse type, lookup targets, length/range/precision details, required level, primary fields, and read/create/update flags.
 - **Record data (read-only)** retrieves records in pages of 10–500 rows. Column headers include display name, logical name, and Dataverse type. File/image/party-list and other unsafe preview values are excluded from the data request but remain visible on the metadata tab.
 
-Both tabs keep the primary record GUID first, list custom columns before Dataverse built-in columns, and shade built-in columns with a light blue-gray background. Long names are measured for a wider initial column, wrap in record headers, and remain available in full through tooltips.
+For the columns each tab displays, both keep the primary record GUID first, then list custom columns, Dataverse-generated columns, and Dataverse system columns. Generated columns (the primary GUID and internal columns whose `AttributeOf` metadata extends another column) use a light yellow background; system columns use light blue-gray; custom columns remain white. Long names are measured for a wider initial column, wrap in record headers, and remain available in full through tooltips.
+
+Click a header in **Columns and data types** to sort the column definitions ascending or descending while the primary GUID remains pinned first. Click a header in **Record data (read-only)** to sort through Dataverse across the complete table, reset paging to page 1, and use the primary GUID as a stable secondary order.
 
 The inspector never creates, updates, or deletes records.
 
@@ -81,3 +83,5 @@ dotnet test PowerPlatformSolutionExporter.slnx
 - [Canvas App table and publish timestamps](https://learn.microsoft.com/en-us/power-apps/developer/data-platform/reference/entities/canvasapp)
 - [Save and publish a Canvas App](https://learn.microsoft.com/en-us/power-apps/maker/canvas-apps/save-publish-app)
 - [Solution versioning](https://learn.microsoft.com/en-us/power-apps/maker/data-platform/update-solutions)
+- [Dataverse AttributeMetadata](https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/reference/attributemetadata?view=dataverse-latest)
+- [AttributeMetadata.AttributeOf](https://learn.microsoft.com/en-us/dotnet/api/microsoft.xrm.sdk.metadata.attributemetadata.attributeof?view=dataverse-sdk-latest)
