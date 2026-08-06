@@ -1,7 +1,7 @@
 using System.Text.Json;
-using dataverse_table_backup_restore.Models;
+using dataverse_solution_exporter.Models;
 
-namespace dataverse_table_backup_restore.Services;
+namespace dataverse_solution_exporter.Services;
 
 public sealed class ConnectionProfileStore
 {
@@ -15,10 +15,7 @@ public sealed class ConnectionProfileStore
 
     public ConnectionProfileStore(string? filePath = null)
     {
-        _filePath = filePath ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "DataverseSnapshotManager",
-            "connection-profiles.json");
+        _filePath = filePath ?? AppStorage.GetPath("connection-profiles.json");
     }
 
     public IReadOnlyList<ConnectionProfile> Load()

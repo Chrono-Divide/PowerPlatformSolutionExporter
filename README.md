@@ -1,86 +1,81 @@
-# Dataverse Snapshot Manager
+# Dataverse Solution Exporter
 
-A general-purpose Windows Forms utility for taking point-in-time snapshots of Dataverse custom table structure and data, restoring custom tables from a snapshot, and clearing the records from one custom table without deleting its structure.
+A Windows Forms utility for publishing server-saved Dataverse customizations, incrementing an unmanaged Solution revision, exporting the Solution as an unmanaged ZIP, and inspecting the tables included in the Solution.
 
-The main form is `frmMain` and all application UI text is English. The application has no built-in environment, account, publisher, table-name, or solution-name catalog.
+The main window remains named `frmMain`, and all UI text is English. Snapshot restore and destructive table-data operations have been removed.
 
-## Table selection
+## Export workflow
 
-The default scope is **Custom tables**. All unmanaged custom tables returned by the connected environment are selected initially; use the checkboxes or selection buttons to narrow the snapshot. The optional **All tables** scope is provided for inspection, but snapshot, restore, and clear operations remain restricted to unmanaged custom tables.
+Select an unmanaged Solution from the connected environment and choose **Publish & Export Unmanaged ZIP**. After explicit confirmation, the application performs this sequence:
+
+1. Run a read-only Canvas App preflight by comparing each included app's `lastmodifiedtime` with `lastpublishtime`. A known draft or incomplete verification blocks the operation before Publish All or any other mutation.
+2. Execute Dataverse `PublishAllXmlRequest`. This publishes all saved customizations in the connected environment, not only the selected Solution.
+3. Reload and verify the Canvas App components again to catch a concurrent save or incomplete publish.
+4. Increment the final `major.minor.build.revision` segment. For example, `0.1.0.23` becomes `0.1.0.24`.
+5. Export through Dataverse `ExportSolutionRequest` with `Managed = false`.
+6. Reopen the ZIP, verify its unique name, version, and unmanaged flag, and calculate its SHA-256 hash.
+
+The exported file is named like:
+
+```text
+SolutionUniqueName_0_1_0_24_unmanaged_20260806_120000_123.zip
+```
+
+Power Platform CLI is not required; connection, publish, version update, and export all use the authenticated Dataverse SDK client.
+
+## Important publishing boundary
+
+No API can save edits that still exist only inside a maker's open browser session. Makers must save their work in Power Apps Studio before starting the export.
+
+The application can publish customizations that have reached Dataverse and can block an export when Canvas App timestamps show a saved unpublished version. It cannot detect keystrokes or edits that have never been saved to the service. Cloud flows and other component types also retain their server-side saved/activation state; the tool does not automatically enable disabled flows.
+
+The Solution version is changed before the export request. If Dataverse rejects or interrupts the subsequent export, the incremented version remains online; skipped version numbers are harmless and are not automatically rolled back.
+
+## Solution and table inspection
+
+The main table grid lists the tables actually included in the selected Solution. It also summarizes Canvas Apps, model-driven apps, workflows, plug-in assemblies, web resources, and security roles.
+
+Double-click a table to open the read-only inspector:
+
+- **Columns and data types** shows display, logical and schema names, Dataverse type, lookup targets, length/range/precision details, required level, primary fields, and read/create/update flags.
+- **Record data (read-only)** retrieves records in pages of 10–500 rows. Column headers include display name, logical name, and Dataverse type. File/image/party-list and other unsafe preview values are excluded from the data request but remain visible on the metadata tab.
+
+The inspector never creates, updates, or deletes records.
 
 ## Saved connections
 
-Environment URL and user name are editable drop-down lists. Choose **Save profile** to retain a pair, or connect successfully to save it automatically as the most recently used profile. **Remove** deletes the selected pair from the saved list.
+Environment URL and user name are editable drop-down lists. Profiles are stored in:
 
-Profiles are stored in `%LocalAppData%\DataverseSnapshotManager\connection-profiles.json`. The profile contains only the environment URL, user-name hint, and last-used time. Passwords and access tokens are not written to this file; interactive sign-in and token caching remain managed by MSAL through the Dataverse client.
+```text
+%LocalAppData%\DataverseSolutionExporter\connection-profiles.json
+```
 
-## Snapshot contents
-
-A `.dvsnapshot` file is a ZIP-compatible package that contains:
-
-- `manifest.json` with environment, table, record-count, warning, and checksum information.
-- `solution.zip` when structure is included. This is an unmanaged Dataverse solution exported through PAC CLI.
-- One typed JSON file per selected table, containing the table metadata needed by the tool and, when requested, its records.
-
-Snapshot packages can contain passwords, personal information, and other business data. They are excluded from Git by `.gitignore`; store them in an access-controlled location.
-
-The selected-table JSON and the structure package have different scopes. Data is captured only for the selected tables, but `solution.zip` is the **entire named solution**. Before creating a snapshot, the application verifies that the solution contains every selected table. If the solution contains additional tables, the manifest and operation log record a warning because a later structure restore imports those additional components too.
-
-Creation is read-only against Dataverse. It exports the solution, reads metadata, and retrieves records in pages; it does not create, update, or delete Dataverse rows. The package is written only after table files and SHA-256 checksums have been produced.
-
-## Restore behavior
-
-Before asking for confirmation, the application performs a no-write preflight. It verifies the package format, target environment, manifest/file consistency, SHA-256 checksums, table and record counts, unique IDs, supported value encoding, and that all selected tables occur in `solution.zip`. No solution is imported and no record is written if this preflight fails.
-
-Structure restore imports and publishes the **whole saved unmanaged solution**, not only the tables whose data was captured. This can recreate a missing custom table or column and reapply saved customizations. It can also overwrite customizations for components included in that solution. Solution import is additive and does not automatically delete extra schema components that were created after the snapshot.
-
-Data restore runs in two passes:
-
-1. Create missing records with their original primary GUIDs and align writable scalar values.
-2. Align lookups, owners, state, and status after referenced records are available.
-
-Before data writes, the application confirms that each target table is an unmanaged custom table, its primary ID matches, and each restorable source column exists with a compatible type and writable target. A snapshot `null` clears the corresponding writable target value. Read-only system values, unsupported special values, and fields excluded with a warning are not recreated.
-
-By default, records created after the snapshot are preserved. The optional **Delete records not present in the snapshot** setting enables strict record alignment and is intentionally off by default. Deletions follow Dataverse relationship cascade behavior and can affect related tables.
-
-With **Create a safety snapshot before restore** selected, current data for source tables that already exist is captured before the restore begins. Current structure is also exported when the source snapshot includes a structure package. A table that does not yet exist has no current data to preserve.
-
-Restore is not a database transaction. Records are processed sequentially, failures are counted and processing continues, and cancellation or a PAC/import error can leave a partially applied restore. The tool does not provide an automatic rollback; use the safety snapshot for a deliberate follow-up recovery.
-
-Cross-environment restore is blocked. Mutating operations are limited to unmanaged custom tables.
-
-## Clear table data
-
-Select exactly one custom table and choose **Clear Selected Table Data**. The application:
-
-1. Creates an automatic data snapshot of the selected table.
-2. Requires the exact confirmation text `CLEAR`.
-3. Deletes records in batches while keeping the table structure.
-
-Dataverse relationship cascade rules can delete related records in other tables. Review the confirmation and automatic snapshot path before proceeding.
+Only the environment URL, user-name hint, and last-used timestamp are stored. Passwords and access tokens are not written to the profile. Existing profiles and the MSAL cache are migrated on first use from the legacy `%LocalAppData%\DataverseSnapshotManager` directory.
 
 ## Requirements
 
-- Windows with .NET 10 Desktop Runtime/SDK.
-- Power Platform CLI (`pac`) installed and authenticated.
-- Permission to read metadata/data, export/import the configured solution, and create/update/delete records as required.
-- Interactive Microsoft sign-in may appear when the application connects through `Microsoft.PowerPlatform.Dataverse.Client`.
+- Windows with the .NET 10 Desktop Runtime, or the .NET 10 SDK for building.
+- Dataverse privileges to read Solution/component/table metadata and records.
+- Privileges to publish customizations, update the selected Solution version, and export an unmanaged Solution.
+- Permission to read Canvas App metadata for publish-state verification.
 
-Enter the target environment URL and, optionally, a sign-in account hint. To create a structure snapshot, enter the unique name of an existing unmanaged solution that contains the selected custom tables.
-
-## Build
+## Build and test
 
 ```powershell
-dotnet build dataverse-table-backup-restore.slnx
+dotnet build dataverse-solution-exporter.slnx
+dotnet test dataverse-solution-exporter.slnx
 ```
 
-## Known limitations
+## Safety notes
 
-- File, full-size image, activity party-list, and other special Dataverse values require manual verification; the manifest records warnings when detected.
-- Audit history and immutable system timestamps/users are not recreated as ordinary writable fields.
-- Solution import restores missing or changed components but does not remove extra schema components.
-- The configured solution must contain the selected custom tables for a complete structure snapshot.
-- Record restore is intentionally sequential to make errors visible and reduce throttling risk; very large tables can take time.
-- The `.dvsnapshot` package is not encrypted. Protect it as a copy of the underlying business data.
-- Restore does not recreate audit history or guarantee immutable created/modified timestamps and users.
-- There is no cross-table ACID transaction or automatic rollback if a restore is interrupted.
+- **Publish All** can make saved customizations visible to users across the connected environment. The confirmation dialog names this scope explicitly.
+- The export button never imports a Solution and never modifies table records, but it does publish customizations and update the Solution version.
+- Exported unmanaged ZIPs can contain application source, plug-ins, flows, connection references, and environment-variable definitions. Store them as protected source artifacts.
+
+## Microsoft references
+
+- [Export solutions](https://learn.microsoft.com/en-us/power-apps/maker/data-platform/export-solutions)
+- [PublishAllXmlRequest](https://learn.microsoft.com/en-us/dotnet/api/microsoft.crm.sdk.messages.publishallxmlrequest?view=dataverse-sdk-latest)
+- [Canvas App table and publish timestamps](https://learn.microsoft.com/en-us/power-apps/developer/data-platform/reference/entities/canvasapp)
+- [Save and publish a Canvas App](https://learn.microsoft.com/en-us/power-apps/maker/canvas-apps/save-publish-app)
+- [Solution versioning](https://learn.microsoft.com/en-us/power-apps/maker/data-platform/update-solutions)

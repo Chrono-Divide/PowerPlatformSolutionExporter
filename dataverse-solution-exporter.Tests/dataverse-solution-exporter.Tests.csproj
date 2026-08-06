@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\dataverse-table-backup-restore\dataverse-table-backup-restore.csproj" />
+    <ProjectReference Include="..\dataverse-solution-exporter\dataverse-solution-exporter.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -3,7 +3,11 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
-    <RootNamespace>dataverse_table_backup_restore</RootNamespace>
+    <RootNamespace>dataverse_solution_exporter</RootNamespace>
+    <AssemblyName>DataverseSolutionExporter</AssemblyName>
+    <AssemblyTitle>Dataverse Solution Exporter</AssemblyTitle>
+    <Product>Dataverse Solution Exporter</Product>
+    <Description>Publish and export verified unmanaged Dataverse solutions and inspect included table metadata and records.</Description>
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>

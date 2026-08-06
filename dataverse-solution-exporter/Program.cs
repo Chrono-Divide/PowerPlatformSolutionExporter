@@ -1,4 +1,4 @@
-namespace dataverse_table_backup_restore
+namespace dataverse_solution_exporter
 {
     internal static class Program
     {

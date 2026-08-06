@@ -24,6 +24,8 @@ packages/
 !.env.example
 *.log
 
-# Dataverse snapshot packages can contain sensitive business data
+# Legacy snapshot packages and exported solution artifacts
 *.dvsnapshot
 DataverseSnapshots/
+DataverseSolutionExports/
+*_unmanaged_*.zip

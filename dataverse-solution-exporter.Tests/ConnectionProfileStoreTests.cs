@@ -1,14 +1,14 @@
-using dataverse_table_backup_restore.Services;
+using dataverse_solution_exporter.Services;
 using Xunit;
 
-namespace dataverse_table_backup_restore.Tests;
+namespace dataverse_solution_exporter.Tests;
 
 public sealed class ConnectionProfileStoreTests
 {
     [Fact]
     public void ProfilesRoundTripWithoutSecretsAndCanBeRemoved()
     {
-        var testDirectory = Path.Combine(Path.GetTempPath(), "DataverseSnapshotManagerTests", Guid.NewGuid().ToString("N"));
+        var testDirectory = Path.Combine(Path.GetTempPath(), "DataverseSolutionExporterTests", Guid.NewGuid().ToString("N"));
         var profileFile = Path.Combine(testDirectory, "connection-profiles.json");
 
         try
@@ -46,7 +46,7 @@ public sealed class ConnectionProfileStoreTests
     [Fact]
     public void InvalidOrCorruptProfilesDoNotBreakStartup()
     {
-        var testDirectory = Path.Combine(Path.GetTempPath(), "DataverseSnapshotManagerTests", Guid.NewGuid().ToString("N"));
+        var testDirectory = Path.Combine(Path.GetTempPath(), "DataverseSolutionExporterTests", Guid.NewGuid().ToString("N"));
         var profileFile = Path.Combine(testDirectory, "connection-profiles.json");
 
         try

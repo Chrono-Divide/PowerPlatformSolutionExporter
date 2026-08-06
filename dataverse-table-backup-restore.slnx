@@ -1,4 +1,0 @@
-<Solution>
-  <Project Path="dataverse-table-backup-restore/dataverse-table-backup-restore.csproj" />
-  <Project Path="dataverse-table-backup-restore.Tests/dataverse-table-backup-restore.Tests.csproj" />
-</Solution>
