@@ -1,3 +1,4 @@
+using System.Reflection;
 using PowerPlatformSolutionExporter.Models;
 using PowerPlatformSolutionExporter.Services;
 using Microsoft.Xrm.Sdk;
@@ -9,7 +10,7 @@ namespace PowerPlatformSolutionExporter.Tests;
 public sealed class TableViewerTests
 {
     [Fact]
-    public void InspectorShowsColumnTypesAndKeepsRecordGridReadOnly()
+    public void InspectorOrdersColumnsHighlightsBuiltInsAndKeepsRecordGridReadOnly()
     {
         RunInSta(() =>
         {
@@ -31,15 +32,40 @@ public sealed class TableViewerTests
                 DisplayName = new Microsoft.Xrm.Sdk.Label("Sample name", 1033),
                 MaxLength = 100,
             };
+            var customColumn = new StringAttributeMetadata
+            {
+                LogicalName = "new_customvalue",
+                SchemaName = "new_CustomValue",
+                DisplayName = new Microsoft.Xrm.Sdk.Label("Custom value", 1033),
+                MaxLength = 200,
+            };
+            var builtInColumn = new StringAttributeMetadata
+            {
+                LogicalName = "utcconversiontimezonecode",
+                SchemaName = "UTCConversionTimeZoneCode",
+                DisplayName = new Microsoft.Xrm.Sdk.Label(
+                    "UTC conversion time zone code with a deliberately long display name",
+                    1033),
+                MaxLength = 100,
+            };
             SetMetadataProperty(metadata, nameof(EntityMetadata.PrimaryIdAttribute), "new_sampleid");
             SetMetadataProperty(metadata, nameof(EntityMetadata.PrimaryNameAttribute), "new_name");
-            SetMetadataProperty(metadata, nameof(EntityMetadata.Attributes), new AttributeMetadata[] { primaryId, primaryName });
+            SetMetadataProperty(
+                metadata,
+                nameof(EntityMetadata.Attributes),
+                new AttributeMetadata[] { builtInColumn, customColumn, primaryName, primaryId });
             SetMetadataProperty(primaryId, nameof(AttributeMetadata.IsPrimaryId), true);
             SetMetadataProperty(primaryId, nameof(AttributeMetadata.IsValidForRead), true);
+            SetMetadataProperty(primaryId, nameof(AttributeMetadata.IsCustomAttribute), false);
             SetMetadataProperty(primaryName, nameof(AttributeMetadata.IsPrimaryName), true);
+            SetMetadataProperty(primaryName, nameof(AttributeMetadata.IsCustomAttribute), true);
             SetMetadataProperty(primaryName, nameof(AttributeMetadata.IsValidForRead), true);
             SetMetadataProperty(primaryName, nameof(AttributeMetadata.IsValidForCreate), true);
             SetMetadataProperty(primaryName, nameof(AttributeMetadata.IsValidForUpdate), true);
+            SetMetadataProperty(customColumn, nameof(AttributeMetadata.IsCustomAttribute), true);
+            SetMetadataProperty(customColumn, nameof(AttributeMetadata.IsValidForRead), true);
+            SetMetadataProperty(builtInColumn, nameof(AttributeMetadata.IsCustomAttribute), false);
+            SetMetadataProperty(builtInColumn, nameof(AttributeMetadata.IsValidForRead), true);
             var table = new DataverseTableInfo
             {
                 DisplayName = "Sample",
@@ -52,18 +78,91 @@ public sealed class TableViewerTests
             };
 
             using var service = new DataverseService();
+            var columns = service.GetTableColumns(table);
             using var form = new frmTableViewer(service, table);
             var columnGrid = FindControl<DataGridView>(form, "dgvColumns");
             var dataGrid = FindControl<DataGridView>(form, "dgvData");
             var tabs = FindControl<TabControl>(form, "tabViewer");
 
             Assert.Equal("Sample - Table Inspector", form.Text);
-            Assert.Equal(2, columnGrid.Rows.Count);
+            Assert.Equal(
+                ["new_sampleid", "new_name", "new_customvalue", "utcconversiontimezonecode"],
+                columns.Select(column => column.LogicalName));
+            Assert.Equal(4, columnGrid.Rows.Count);
+            Assert.Equal(
+                ["new_sampleid", "new_name", "new_customvalue", "utcconversiontimezonecode"],
+                columnGrid.Rows.Cast<DataGridViewRow>().Select(row => row.Cells[1].Value));
+            Assert.True(columnGrid.Rows[0].DefaultCellStyle.BackColor != Color.Empty);
+            Assert.True(columnGrid.Rows[2].DefaultCellStyle.BackColor.IsEmpty);
+            Assert.True(columnGrid.Rows[3].DefaultCellStyle.BackColor != Color.Empty);
+            Assert.True(columnGrid.Columns["DisplayName"]!.Width > 190);
+            Assert.Equal(
+                columns[3].DisplayName,
+                columnGrid.Rows[3].Cells[0].ToolTipText);
             Assert.True(columnGrid.ReadOnly);
             Assert.True(dataGrid.ReadOnly);
             Assert.Equal("Columns and data types", tabs.TabPages[0].Text);
             Assert.Equal("Record data (read-only)", tabs.TabPages[1].Text);
+
+            var page = new TableDataPage
+            {
+                PageNumber = 1,
+                Columns = columns,
+                Rows =
+                [
+                    new Dictionary<string, string?>
+                    {
+                        ["new_sampleid"] = Guid.Empty.ToString(),
+                        ["new_name"] = "Sample",
+                        ["new_customvalue"] = "Custom",
+                        ["utcconversiontimezonecode"] = "4",
+                    },
+                ],
+                HasMoreRecords = false,
+            };
+            var populateData = typeof(frmTableViewer).GetMethod(
+                "PopulateData",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(populateData);
+            populateData.Invoke(form, [page]);
+
+            Assert.Equal(
+                ["new_sampleid", "new_name", "new_customvalue", "utcconversiontimezonecode"],
+                dataGrid.Columns.Cast<DataGridViewColumn>().Select(column => column.Name));
+            Assert.Equal(DataGridViewColumnHeadersHeightSizeMode.AutoSize, dataGrid.ColumnHeadersHeightSizeMode);
+            Assert.Equal(DataGridViewTriState.True, dataGrid.ColumnHeadersDefaultCellStyle.WrapMode);
+            Assert.True(dataGrid.Columns["new_customvalue"]!.DefaultCellStyle.BackColor.IsEmpty);
+            var builtInDataColumn = dataGrid.Columns["utcconversiontimezonecode"]!;
+            Assert.True(builtInDataColumn.DefaultCellStyle.BackColor != Color.Empty);
+            Assert.True(builtInDataColumn.HeaderCell.Style.BackColor != Color.Empty);
+            Assert.Contains("deliberately long display name", builtInDataColumn.HeaderText);
+            Assert.Equal(builtInDataColumn.HeaderText, builtInDataColumn.HeaderCell.ToolTipText);
+            Assert.True(builtInDataColumn.Width > 190);
+
+            var busyField = typeof(frmTableViewer).GetField("_busy", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(busyField);
+            busyField.SetValue(form, true);
+            form.StartPosition = FormStartPosition.Manual;
+            form.Location = new Point(-4000, -4000);
+            form.Show();
+            Application.DoEvents();
+            var outputDirectory = Path.Combine(Path.GetTempPath(), "PowerPlatformSolutionExporterTests");
+            Directory.CreateDirectory(outputDirectory);
+            tabs.SelectedIndex = 0;
+            Application.DoEvents();
+            SaveFormScreenshot(form, Path.Combine(outputDirectory, "frmTableViewer-columns.png"));
+            tabs.SelectedIndex = 1;
+            Application.DoEvents();
+            SaveFormScreenshot(form, Path.Combine(outputDirectory, "frmTableViewer-data.png"));
+            form.Hide();
         });
+    }
+
+    private static void SaveFormScreenshot(Form form, string outputPath)
+    {
+        using var bitmap = new Bitmap(form.Width, form.Height);
+        form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
+        bitmap.Save(outputPath);
     }
 
     private static void RunInSta(Action action)

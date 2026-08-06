@@ -5,6 +5,13 @@ namespace PowerPlatformSolutionExporter;
 
 public partial class frmTableViewer : Form
 {
+    private static readonly Color BuiltInColumnBackColor = Color.FromArgb(235, 242, 248);
+    private static readonly Color BuiltInColumnHeaderBackColor = Color.FromArgb(211, 225, 237);
+    private static readonly Color BuiltInColumnSelectionBackColor = Color.FromArgb(190, 214, 233);
+    private const int StandardDataColumnMinimumWidth = 180;
+    private const int PrimaryIdColumnMinimumWidth = 300;
+    private const int MaximumDataColumnWidth = 480;
+
     private readonly DataverseService _dataverseService;
     private readonly DataverseTableInfo _table;
     private readonly List<string?> _pageStartCookies = [null];
@@ -26,9 +33,10 @@ public partial class frmTableViewer : Form
     private void PopulateColumns()
     {
         dgvColumns.Rows.Clear();
-        foreach (var column in _dataverseService.GetTableColumns(_table))
+        var columns = _dataverseService.GetTableColumns(_table);
+        foreach (var column in columns)
         {
-            dgvColumns.Rows.Add(
+            var rowIndex = dgvColumns.Rows.Add(
                 column.DisplayName,
                 column.LogicalName,
                 column.SchemaName,
@@ -40,9 +48,18 @@ public partial class frmTableViewer : Form
                 column.IsValidForRead ? "Yes" : "No",
                 column.IsValidForCreate ? "Yes" : "No",
                 column.IsValidForUpdate ? "Yes" : "No");
+            var row = dgvColumns.Rows[rowIndex];
+            row.Tag = column;
+            if (!column.IsCustomAttribute)
+            {
+                ApplyBuiltInStyle(row.DefaultCellStyle);
+            }
         }
 
-        lblColumnSummary.Text = $"{dgvColumns.Rows.Count:N0} columns";
+        var customCount = columns.Count(column => column.IsCustomAttribute);
+        var builtInCount = columns.Count - customCount;
+        lblColumnSummary.Text = $"{columns.Count:N0} columns  |  {customCount:N0} custom  |  {builtInCount:N0} Dataverse built-in (shaded)";
+        ResizeMetadataColumns();
     }
 
     private async void frmTableViewer_Shown(object? sender, EventArgs e)
@@ -165,14 +182,26 @@ public partial class frmTableViewer : Form
             dgvData.Columns.Clear();
             foreach (var column in page.Columns)
             {
-                dgvData.Columns.Add(new DataGridViewTextBoxColumn
+                var headerText = $"{column.DisplayName}\n{column.LogicalName} · {column.DataType}";
+                var dataColumn = new DataGridViewTextBoxColumn
                 {
                     Name = column.LogicalName,
-                    HeaderText = $"{column.DisplayName}\n{column.LogicalName} · {column.DataType}",
-                    MinimumWidth = 120,
-                    Width = column.IsPrimaryId ? 250 : 190,
+                    HeaderText = headerText,
+                    MinimumWidth = column.IsPrimaryId ? PrimaryIdColumnMinimumWidth : StandardDataColumnMinimumWidth,
+                    Width = CalculateDataColumnWidth(column),
                     SortMode = DataGridViewColumnSortMode.NotSortable,
-                });
+                    Tag = column,
+                    ToolTipText = headerText,
+                };
+                dataColumn.HeaderCell.ToolTipText = headerText;
+                if (!column.IsCustomAttribute)
+                {
+                    ApplyBuiltInStyle(dataColumn.DefaultCellStyle);
+                    dataColumn.HeaderCell.Style.BackColor = BuiltInColumnHeaderBackColor;
+                    dataColumn.HeaderCell.Style.ForeColor = Color.Black;
+                }
+
+                dgvData.Columns.Add(dataColumn);
             }
 
             foreach (var row in page.Rows)
@@ -182,11 +211,72 @@ public partial class frmTableViewer : Form
                     .Cast<object>()
                     .ToArray());
             }
+
+            dgvData.AutoResizeColumnHeadersHeight();
         }
         finally
         {
             dgvData.ResumeLayout();
         }
+    }
+
+    private int CalculateDataColumnWidth(TableColumnInfo column)
+    {
+        var headerFont = dgvData.ColumnHeadersDefaultCellStyle.Font ?? dgvData.Font;
+        var displayNameWidth = TextRenderer.MeasureText(column.DisplayName, headerFont).Width;
+        var metadataWidth = TextRenderer.MeasureText($"{column.LogicalName} · {column.DataType}", headerFont).Width;
+        var minimumWidth = column.IsPrimaryId ? PrimaryIdColumnMinimumWidth : StandardDataColumnMinimumWidth;
+        return Math.Clamp(Math.Max(displayNameWidth, metadataWidth) + 30, minimumWidth, MaximumDataColumnWidth);
+    }
+
+    private void ResizeMetadataColumns()
+    {
+        foreach (DataGridViewColumn column in dgvColumns.Columns)
+        {
+            var minimumWidth = column.Name switch
+            {
+                "DisplayName" or "LogicalName" or "SchemaName" => 180,
+                "DataType" or "Details" => 140,
+                _ => 80,
+            };
+            var maximumWidth = column.Name switch
+            {
+                "DisplayName" or "LogicalName" or "SchemaName" => MaximumDataColumnWidth,
+                "Details" => 400,
+                "DataType" => 240,
+                _ => 140,
+            };
+            var headerFont = dgvColumns.ColumnHeadersDefaultCellStyle.Font ?? dgvColumns.Font;
+            var cellFont = column.DefaultCellStyle.Font ?? dgvColumns.DefaultCellStyle.Font ?? dgvColumns.Font;
+            var contentWidth = TextRenderer.MeasureText(column.HeaderText, headerFont).Width;
+            foreach (DataGridViewRow row in dgvColumns.Rows)
+            {
+                var value = row.Cells[column.Index].Value?.ToString();
+                if (!string.IsNullOrEmpty(value))
+                {
+                    contentWidth = Math.Max(contentWidth, TextRenderer.MeasureText(value, cellFont).Width);
+                }
+            }
+
+            column.AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
+            column.Width = Math.Clamp(contentWidth + 30, minimumWidth, maximumWidth);
+        }
+
+        foreach (DataGridViewRow row in dgvColumns.Rows)
+        {
+            foreach (DataGridViewCell cell in row.Cells)
+            {
+                cell.ToolTipText = cell.Value?.ToString() ?? string.Empty;
+            }
+        }
+    }
+
+    private static void ApplyBuiltInStyle(DataGridViewCellStyle style)
+    {
+        style.BackColor = BuiltInColumnBackColor;
+        style.ForeColor = Color.Black;
+        style.SelectionBackColor = BuiltInColumnSelectionBackColor;
+        style.SelectionForeColor = Color.Black;
     }
 
     private void UpdateDataControls()

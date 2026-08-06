@@ -40,6 +40,8 @@ Double-click a table to open the read-only inspector:
 - **Columns and data types** shows display, logical and schema names, Dataverse type, lookup targets, length/range/precision details, required level, primary fields, and read/create/update flags.
 - **Record data (read-only)** retrieves records in pages of 10–500 rows. Column headers include display name, logical name, and Dataverse type. File/image/party-list and other unsafe preview values are excluded from the data request but remain visible on the metadata tab.
 
+Both tabs keep the primary record GUID first, list custom columns before Dataverse built-in columns, and shade built-in columns with a light blue-gray background. Long names are measured for a wider initial column, wrap in record headers, and remain available in full through tooltips.
+
 The inspector never creates, updates, or deletes records.
 
 ## Saved connections

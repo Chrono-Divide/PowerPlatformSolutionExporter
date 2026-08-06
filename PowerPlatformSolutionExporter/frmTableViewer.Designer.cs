@@ -89,7 +89,7 @@ partial class frmTableViewer
         dgvColumns.AllowUserToDeleteRows = false;
         dgvColumns.AllowUserToOrderColumns = true;
         dgvColumns.AllowUserToResizeRows = false;
-        dgvColumns.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.DisplayedCells;
+        dgvColumns.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
         dgvColumns.BackgroundColor = Color.White;
         dgvColumns.Dock = DockStyle.Fill;
         dgvColumns.Name = "dgvColumns";
@@ -123,13 +123,15 @@ partial class frmTableViewer
         dgvData.AllowUserToResizeRows = false;
         dgvData.BackgroundColor = Color.White;
         dgvData.ClipboardCopyMode = DataGridViewClipboardCopyMode.EnableAlwaysIncludeHeaderText;
-        dgvData.ColumnHeadersHeight = 48;
-        dgvData.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+        dgvData.ColumnHeadersDefaultCellStyle.WrapMode = DataGridViewTriState.True;
+        dgvData.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
         dgvData.Dock = DockStyle.Fill;
+        dgvData.EnableHeadersVisualStyles = false;
         dgvData.Name = "dgvData";
         dgvData.ReadOnly = true;
         dgvData.RowHeadersVisible = false;
         dgvData.SelectionMode = DataGridViewSelectionMode.CellSelect;
+        dgvData.ShowCellToolTips = true;
         // toolbar
         pnlDataToolbar.Controls.Add(lblPageSize);
         pnlDataToolbar.Controls.Add(numPageSize);

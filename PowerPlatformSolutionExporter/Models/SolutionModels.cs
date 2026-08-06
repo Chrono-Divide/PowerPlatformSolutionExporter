@@ -57,6 +57,7 @@ public sealed class TableColumnInfo
     public required string RequiredLevel { get; init; }
     public bool IsPrimaryId { get; init; }
     public bool IsPrimaryName { get; init; }
+    public bool IsCustomAttribute { get; init; }
     public bool IsValidForRead { get; init; }
     public bool IsValidForCreate { get; init; }
     public bool IsValidForUpdate { get; init; }

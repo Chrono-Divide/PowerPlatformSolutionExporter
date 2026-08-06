@@ -271,11 +271,13 @@ public sealed class DataverseService : IDisposable
                 RequiredLevel = attribute.RequiredLevel?.Value.ToString() ?? "None",
                 IsPrimaryId = attribute.IsPrimaryId == true,
                 IsPrimaryName = attribute.IsPrimaryName == true,
+                IsCustomAttribute = attribute.IsCustomAttribute == true,
                 IsValidForRead = attribute.IsValidForRead == true,
                 IsValidForCreate = attribute.IsValidForCreate == true,
                 IsValidForUpdate = attribute.IsValidForUpdate == true,
             })
             .OrderByDescending(column => column.IsPrimaryId)
+            .ThenByDescending(column => column.IsCustomAttribute)
             .ThenByDescending(column => column.IsPrimaryName)
             .ThenBy(column => column.DisplayName, StringComparer.CurrentCultureIgnoreCase)
             .ThenBy(column => column.LogicalName, StringComparer.OrdinalIgnoreCase)
