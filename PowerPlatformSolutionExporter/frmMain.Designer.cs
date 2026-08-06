@@ -223,6 +223,7 @@ partial class frmMain
         // splitMain
         splitMain.Dock = DockStyle.Fill;
         splitMain.FixedPanel = FixedPanel.Panel2;
+        splitMain.Name = "splitMain";
         splitMain.Panel1MinSize = 500;
         splitMain.Panel2MinSize = 500;
         splitMain.Panel1.Controls.Add(grpTables);
@@ -230,6 +231,7 @@ partial class frmMain
         splitMain.Size = new Size(1380, 450);
         splitMain.SplitterDistance = 790;
         splitMain.SplitterWidth = 6;
+        splitMain.TabStop = false;
         // grpTables
         grpTables.Controls.Add(dgvTables);
         grpTables.Controls.Add(lblTableSummary);

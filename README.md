@@ -23,6 +23,8 @@ SolutionUniqueName_0_1_0_24_unmanaged_20260806_120000_123.zip
 
 Power Platform CLI is not required; connection, publish, version update, and export all use the authenticated Dataverse SDK client.
 
+The application version is defined by the `Version` property in `PowerPlatformSolutionExporter.csproj` and appears in the `frmMain` window title. Increment the patch component by one for every released modification (`0.0.1`, `0.0.2`, `0.0.3`, and so on).
+
 ## Important publishing boundary
 
 No API can save edits that still exist only inside a maker's open browser session. Makers must save their work in Power Apps Studio before starting the export.

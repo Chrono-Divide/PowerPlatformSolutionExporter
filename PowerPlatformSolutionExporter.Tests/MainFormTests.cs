@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.RegularExpressions;
 using PowerPlatformSolutionExporter;
 using Xunit;
@@ -13,7 +14,8 @@ public sealed class MainFormTests
         {
             using var form = new frmMain();
             Assert.Equal("frmMain", form.Name);
-            Assert.Equal("Power Platform Solution Exporter", form.Text);
+            Assert.Equal(new Version(0, 0, 1, 0), typeof(frmMain).Assembly.GetName().Version);
+            Assert.Equal("Power Platform Solution Exporter v0.0.1", form.Text);
 
             var environmentList = FindControl<ComboBox>(form, "cboEnvironmentUrl");
             var userNameList = FindControl<ComboBox>(form, "cboUserName");
@@ -32,6 +34,41 @@ public sealed class MainFormTests
             Assert.DoesNotContain(allText, text => text.Contains("Restore Snapshot", StringComparison.OrdinalIgnoreCase));
             Assert.DoesNotContain(allText, text => text.Contains("Danger Zone", StringComparison.OrdinalIgnoreCase));
             Assert.DoesNotContain(allText, text => Regex.IsMatch(text, "[\\u3040-\\u30ff\\u3400-\\u9fff]"));
+        });
+    }
+
+    [Fact]
+    public void BusyOperationFocusesCancelInsteadOfTheResizableSplitter()
+    {
+        RunInSta(() =>
+        {
+            using var form = new frmMain
+            {
+                StartPosition = FormStartPosition.Manual,
+                Location = new Point(-4000, -4000),
+            };
+            form.Show();
+            Application.DoEvents();
+
+            var connectButton = FindControl<Button>(form, "btnConnect");
+            var cancelButton = FindControl<Button>(form, "btnCancelOperation");
+            var splitter = FindControl<SplitContainer>(form, "splitMain");
+            Assert.False(splitter.TabStop);
+            Assert.True(connectButton.Focus());
+
+            var busyField = typeof(frmMain).GetField("_busy", BindingFlags.Instance | BindingFlags.NonPublic);
+            var updateActionState = typeof(frmMain).GetMethod(
+                "UpdateActionState",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(busyField);
+            Assert.NotNull(updateActionState);
+            busyField.SetValue(form, true);
+            updateActionState.Invoke(form, null);
+            Application.DoEvents();
+
+            Assert.True(cancelButton.Focused);
+            Assert.False(splitter.Focused);
+            form.Hide();
         });
     }
 

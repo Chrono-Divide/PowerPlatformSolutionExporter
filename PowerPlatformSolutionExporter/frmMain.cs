@@ -19,6 +19,7 @@ public partial class frmMain : Form
     public frmMain()
     {
         InitializeComponent();
+        Text = $"{Text} v{GetApplicationVersion()}";
         dgvTables.AutoGenerateColumns = false;
         dgvTables.DataSource = _tableRows;
         txtExportFolder.Text = Path.Combine(
@@ -432,6 +433,23 @@ public partial class frmMain : Form
         {
             progressOperation.Value = 0;
         }
+
+        if (_busy)
+        {
+            btnCancelOperation.Select();
+        }
+        else if (splitMain.Focused)
+        {
+            btnConnect.Select();
+        }
+    }
+
+    private static string GetApplicationVersion()
+    {
+        var version = typeof(frmMain).Assembly.GetName().Version;
+        return version is null
+            ? "0.0.0"
+            : $"{version.Major}.{version.Minor}.{version.Build}";
     }
 
     private bool IsCanvasPublishPreflightReady()
