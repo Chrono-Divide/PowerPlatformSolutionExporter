@@ -1,6 +1,8 @@
 using System.Reflection;
 using System.Text.RegularExpressions;
+using Microsoft.Xrm.Sdk.Metadata;
 using PowerPlatformSolutionExporter;
+using PowerPlatformSolutionExporter.Models;
 using PowerPlatformSolutionExporter.Services;
 using Xunit;
 
@@ -15,8 +17,8 @@ public sealed class MainFormTests
         {
             using var form = new frmMain();
             Assert.Equal("frmMain", form.Name);
-            Assert.Equal(new Version(0, 0, 4, 0), typeof(frmMain).Assembly.GetName().Version);
-            Assert.Equal("Power Platform Solution Exporter v0.0.4", form.Text);
+            Assert.Equal(new Version(0, 0, 5, 0), typeof(frmMain).Assembly.GetName().Version);
+            Assert.Equal("Power Platform Solution Exporter v0.0.5", form.Text);
 
             var environmentList = FindControl<ComboBox>(form, "cboEnvironmentUrl");
             var userNameList = FindControl<ComboBox>(form, "cboUserName");
@@ -25,8 +27,13 @@ public sealed class MainFormTests
             Assert.NotNull(FindControl<Button>(form, "btnSaveConnectionProfile"));
             Assert.NotNull(FindControl<Button>(form, "btnRemoveConnectionProfile"));
             Assert.NotNull(FindControl<ComboBox>(form, "cboSolutions"));
-            Assert.NotNull(FindControl<Button>(form, "btnExport"));
+            var solutionExportButton = FindControl<Button>(form, "btnExport");
+            Assert.True(solutionExportButton.Height >= 32);
             Assert.Equal("Export Table Data", FindControl<Button>(form, "btnExportTableData").Text);
+            var selectAllData = FindControl<CheckBox>(form, "chkSelectAllTableData");
+            Assert.Equal("Select all", selectAllData.Text);
+            Assert.True(selectAllData.ThreeState);
+            Assert.False(selectAllData.AutoCheck);
             var tableGrid = FindControl<DataGridView>(form, "dgvTables");
             Assert.False(tableGrid.ReadOnly);
             var exportDataColumn = Assert.IsType<DataGridViewCheckBoxColumn>(tableGrid.Columns["colExportData"]);
@@ -96,6 +103,68 @@ public sealed class MainFormTests
                     Directory.Delete(testDirectory, recursive: true);
                 }
             }
+        });
+    }
+
+    [Fact]
+    public void SelectAllCheckboxTogglesEveryTableDataRow()
+    {
+        RunInSta(() =>
+        {
+            using var form = new frmMain();
+            var rowType = typeof(frmMain).GetNestedType("TableGridRow", BindingFlags.NonPublic);
+            var rowsField = typeof(frmMain).GetField("_tableRows", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(rowType);
+            Assert.NotNull(rowsField);
+            var rows = Assert.IsAssignableFrom<System.Collections.IList>(rowsField.GetValue(form));
+            var selectedProperty = rowType.GetProperty("IncludeInDataExport");
+            var updateTableSummary = typeof(frmMain).GetMethod(
+                "UpdateTableSummary",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            var toggleSelection = typeof(frmMain).GetMethod(
+                "chkSelectAllTableData_Click",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.NotNull(selectedProperty);
+            Assert.NotNull(updateTableSummary);
+            Assert.NotNull(toggleSelection);
+            var selectAll = FindControl<CheckBox>(form, "chkSelectAllTableData");
+
+            foreach (var logicalName in new[] { "sample_first", "sample_second" })
+            {
+                var table = new DataverseTableInfo
+                {
+                    DisplayName = logicalName,
+                    LogicalName = logicalName,
+                    SchemaName = logicalName,
+                    PrimaryIdAttribute = $"{logicalName}id",
+                    IsCustom = true,
+                    Metadata = new EntityMetadata
+                    {
+                        LogicalName = logicalName,
+                        SchemaName = logicalName,
+                    },
+                };
+                var row = Activator.CreateInstance(
+                    rowType,
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+                    binder: null,
+                    args: [table],
+                    culture: null);
+                Assert.NotNull(row);
+                rows.Add(row);
+            }
+
+            updateTableSummary.Invoke(form, null);
+            Assert.Equal(CheckState.Checked, selectAll.CheckState);
+            Assert.All(rows.Cast<object>(), row => Assert.True((bool)selectedProperty.GetValue(row)!));
+
+            toggleSelection.Invoke(form, [selectAll, EventArgs.Empty]);
+            Assert.Equal(CheckState.Unchecked, selectAll.CheckState);
+            Assert.All(rows.Cast<object>(), row => Assert.False((bool)selectedProperty.GetValue(row)!));
+
+            toggleSelection.Invoke(form, [selectAll, EventArgs.Empty]);
+            Assert.Equal(CheckState.Checked, selectAll.CheckState);
+            Assert.All(rows.Cast<object>(), row => Assert.True((bool)selectedProperty.GetValue(row)!));
         });
     }
 

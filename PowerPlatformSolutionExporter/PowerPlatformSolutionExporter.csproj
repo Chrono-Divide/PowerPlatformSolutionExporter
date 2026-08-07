@@ -7,7 +7,7 @@
     <AssemblyName>PowerPlatformSolutionExporter</AssemblyName>
     <AssemblyTitle>Power Platform Solution Exporter</AssemblyTitle>
     <Product>Power Platform Solution Exporter</Product>
-    <Version>0.0.4</Version>
+    <Version>0.0.5</Version>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
     <Description>Publish and export verified unmanaged Power Platform solutions and inspect included Dataverse table metadata and records.</Description>
     <Nullable>enable</Nullable>

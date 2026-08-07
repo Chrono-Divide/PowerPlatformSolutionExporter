@@ -52,7 +52,7 @@ Record cells remain selectable and copyable, and clipboard output contains only 
 
 ## Browser-importable table data export
 
-Use the **Export data** checkbox on each table, then choose **Export Table Data** to create a timestamped folder for the selected tables. Every table is checked by default. These checkboxes affect only the CSV data export and never limit **Publish & Export Unmanaged ZIP**. This operation is read-only: it does not publish customizations, change the Solution version, or modify Dataverse records. The folder contains:
+Use the **Export data** checkbox on each table, then choose **Export Table Data** to create a timestamped folder for the selected tables. Every table is checked by default. The three-state **Select all** checkbox switches between all and none and shows an indeterminate state when only some rows are selected. These checkboxes affect only the CSV data export and never limit **Publish & Export Unmanaged ZIP**. This operation is read-only: it does not publish customizations, change the Solution version, or modify Dataverse records. The folder contains:
 
 - One UTF-8 BOM CSV file per table, including its Primary ID GUID and all readable/importable columns.
 - `manifest.json`, which maps every CSV header to its display name, logical name, data type, lookup targets, required level, and skipped-column reason.

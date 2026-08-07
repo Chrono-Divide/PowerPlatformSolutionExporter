@@ -29,6 +29,7 @@ public partial class frmMain : Form
         Text = $"{Text} v{GetApplicationVersion()}";
         dgvTables.AutoGenerateColumns = false;
         dgvTables.DataSource = _tableRows;
+        UpdateTableSummary();
         var defaultExportFolder = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
             "PowerPlatformSolutionExports");
@@ -306,6 +307,24 @@ public partial class frmMain : Form
         UpdateActionState();
     }
 
+    private void chkSelectAllTableData_Click(object? sender, EventArgs e)
+    {
+        if (_busy || _tableRows.Count == 0)
+        {
+            return;
+        }
+
+        var selectAll = _tableRows.Any(row => !row.IncludeInDataExport);
+        foreach (var row in _tableRows)
+        {
+            row.IncludeInDataExport = selectAll;
+        }
+
+        _tableRows.ResetBindings();
+        UpdateTableSummary();
+        UpdateActionState();
+    }
+
     private void btnCancelOperation_Click(object? sender, EventArgs e)
     {
         _operationCancellation?.Cancel();
@@ -547,6 +566,7 @@ public partial class frmMain : Form
         txtExportFolder.Enabled = !_busy;
         btnBrowseExportFolder.Enabled = !_busy;
         btnExportTableData.Enabled = connected && !_busy && _tableRows.Any(row => row.IncludeInDataExport);
+        chkSelectAllTableData.Enabled = connected && !_busy && _tableRows.Count > 0;
         btnExport.Enabled = connected && !_busy && IsCanvasPublishPreflightReady();
         dgvTables.Enabled = connected && !_busy;
         btnCancelOperation.Enabled = _busy;
@@ -579,6 +599,12 @@ public partial class frmMain : Form
     {
         var selectedCount = _tableRows.Count(row => row.IncludeInDataExport);
         lblTableSummary.Text = $"{_tableRows.Count:N0} tables | {selectedCount:N0} selected for data export. Double-click a table to inspect.";
+        chkSelectAllTableData.CheckState = selectedCount switch
+        {
+            0 => CheckState.Unchecked,
+            _ when selectedCount == _tableRows.Count => CheckState.Checked,
+            _ => CheckState.Indeterminate,
+        };
     }
 
     private bool IsCanvasPublishPreflightReady()

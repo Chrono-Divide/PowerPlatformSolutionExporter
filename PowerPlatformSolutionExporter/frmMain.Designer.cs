@@ -29,6 +29,7 @@ partial class frmMain
     private DataGridViewTextBoxColumn colPrimaryId;
     private DataGridViewTextBoxColumn colColumnCount;
     private Panel pnlTableFooter;
+    private CheckBox chkSelectAllTableData;
     private Label lblTableSummary;
     private Button btnExportTableData;
     private GroupBox grpExport;
@@ -92,6 +93,7 @@ partial class frmMain
         colPrimaryId = new DataGridViewTextBoxColumn();
         colColumnCount = new DataGridViewTextBoxColumn();
         pnlTableFooter = new Panel();
+        chkSelectAllTableData = new CheckBox();
         lblTableSummary = new Label();
         btnExportTableData = new Button();
         grpExport = new GroupBox();
@@ -295,10 +297,19 @@ partial class frmMain
         colColumnCount.ReadOnly = true;
         // pnlTableFooter
         pnlTableFooter.Controls.Add(lblTableSummary);
+        pnlTableFooter.Controls.Add(chkSelectAllTableData);
         pnlTableFooter.Controls.Add(btnExportTableData);
         pnlTableFooter.Dock = DockStyle.Bottom;
         pnlTableFooter.Height = 38;
         pnlTableFooter.Padding = new Padding(5, 4, 5, 4);
+        // chkSelectAllTableData
+        chkSelectAllTableData.AutoCheck = false;
+        chkSelectAllTableData.Dock = DockStyle.Left;
+        chkSelectAllTableData.Name = "chkSelectAllTableData";
+        chkSelectAllTableData.Text = "Select all";
+        chkSelectAllTableData.ThreeState = true;
+        chkSelectAllTableData.Width = 90;
+        chkSelectAllTableData.Click += chkSelectAllTableData_Click;
         // lblTableSummary
         lblTableSummary.Dock = DockStyle.Fill;
         lblTableSummary.ForeColor = Color.DimGray;
@@ -403,11 +414,13 @@ partial class frmMain
         lblPublishNotice.ForeColor = Color.DarkOrange;
         lblPublishNotice.Name = "lblPublishNotice";
         lblPublishNotice.Text = "Table checkboxes affect only Export Table Data. This button always exports the full selected Solution as currently configured. A table added with selected objects remains segmented; use Include all objects in Power Apps when every table asset is required. Before export, the tool publishes all server-saved customizations, verifies Canvas App publish timestamps, increments the revision, exports unmanaged, and validates the ZIP. Unsaved browser edits cannot be detected.";
-        btnExport.Anchor = AnchorStyles.Left | AnchorStyles.Right;
         btnExport.BackColor = Color.FromArgb(34, 126, 79);
+        btnExport.Dock = DockStyle.Fill;
         btnExport.FlatStyle = FlatStyle.Flat;
         btnExport.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
         btnExport.ForeColor = Color.White;
+        btnExport.Margin = new Padding(3, 7, 3, 7);
+        btnExport.MinimumSize = new Size(0, 32);
         btnExport.Name = "btnExport";
         btnExport.Text = "Publish && Export Unmanaged ZIP";
         btnExport.UseVisualStyleBackColor = false;
