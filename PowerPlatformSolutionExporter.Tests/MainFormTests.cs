@@ -15,8 +15,8 @@ public sealed class MainFormTests
         {
             using var form = new frmMain();
             Assert.Equal("frmMain", form.Name);
-            Assert.Equal(new Version(0, 0, 2, 0), typeof(frmMain).Assembly.GetName().Version);
-            Assert.Equal("Power Platform Solution Exporter v0.0.2", form.Text);
+            Assert.Equal(new Version(0, 0, 3, 0), typeof(frmMain).Assembly.GetName().Version);
+            Assert.Equal("Power Platform Solution Exporter v0.0.3", form.Text);
 
             var environmentList = FindControl<ComboBox>(form, "cboEnvironmentUrl");
             var userNameList = FindControl<ComboBox>(form, "cboUserName");
@@ -26,6 +26,7 @@ public sealed class MainFormTests
             Assert.NotNull(FindControl<Button>(form, "btnRemoveConnectionProfile"));
             Assert.NotNull(FindControl<ComboBox>(form, "cboSolutions"));
             Assert.NotNull(FindControl<Button>(form, "btnExport"));
+            Assert.Equal("Export Table Data", FindControl<Button>(form, "btnExportTableData").Text);
             Assert.NotNull(FindControl<DataGridView>(form, "dgvTables"));
 
             var allText = EnumerateControls(form)

@@ -12,7 +12,7 @@ using SolutionInfo = PowerPlatformSolutionExporter.Models.SolutionInfo;
 
 namespace PowerPlatformSolutionExporter.Services;
 
-public sealed class DataverseService : IDisposable
+public sealed class DataverseService : IDisposable, ITableDataExportSource
 {
     public const int EntityComponentType = 1;
     public const int OptionSetComponentType = 9;
@@ -28,6 +28,17 @@ public sealed class DataverseService : IDisposable
 
     private const string PrototypeClientId = "51f81489-12ee-4a9e-aaae-a2591f45987d";
     private const string PrototypeRedirectUri = "http://localhost";
+    private static readonly HashSet<string> BrowserImportUnsupportedSystemColumns = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "ownerid",
+        "createdby",
+        "createdonbehalfby",
+        "createdon",
+        "modifiedby",
+        "modifiedonbehalfby",
+        "modifiedon",
+        "overriddencreatedon",
+    };
     private readonly SolutionPackageInspector _packageInspector = new();
     private ServiceClient? _client;
     private List<DataverseTableInfo> _allTables = [];
@@ -35,6 +46,8 @@ public sealed class DataverseService : IDisposable
     public bool IsConnected => _client?.IsReady == true;
     public string ConnectedEnvironmentName => _client?.ConnectedOrgFriendlyName ?? string.Empty;
     public string ConnectedEnvironmentUrl => _client?.ConnectedOrgUriActual?.GetLeftPart(UriPartial.Authority) ?? string.Empty;
+    string ITableDataExportSource.EnvironmentName => ConnectedEnvironmentName;
+    string ITableDataExportSource.EnvironmentUrl => ConnectedEnvironmentUrl;
 
     public async Task ConnectAsync(string environmentUrl, string? userName, CancellationToken cancellationToken)
     {
@@ -285,6 +298,144 @@ public sealed class DataverseService : IDisposable
             .ToList();
     }
 
+    public TableDataExportDefinition GetTableDataExportDefinition(DataverseTableInfo table)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        var includedAttributes = new List<AttributeMetadata>();
+        var skippedColumns = new List<SkippedTableDataExportColumn>();
+        foreach (var attribute in table.Metadata.Attributes
+                     .Where(attribute => !string.IsNullOrWhiteSpace(attribute.LogicalName)))
+        {
+            var unsupportedReason = GetBrowserImportUnsupportedReason(attribute, table.PrimaryIdAttribute);
+            if (unsupportedReason is null)
+            {
+                includedAttributes.Add(attribute);
+                continue;
+            }
+
+            skippedColumns.Add(new SkippedTableDataExportColumn
+            {
+                DisplayName = GetLabel(attribute.DisplayName, attribute.LogicalName),
+                LogicalName = attribute.LogicalName,
+                DataType = GetAttributeTypeName(attribute),
+                Reason = unsupportedReason,
+            });
+        }
+
+        var displayNameCounts = includedAttributes
+            .GroupBy(
+                attribute => GetLabel(attribute.DisplayName, attribute.LogicalName),
+                StringComparer.CurrentCultureIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparer.CurrentCultureIgnoreCase);
+        var columns = includedAttributes
+            .OrderByDescending(attribute =>
+                attribute.IsPrimaryId == true ||
+                string.Equals(attribute.LogicalName, table.PrimaryIdAttribute, StringComparison.OrdinalIgnoreCase))
+            .ThenByDescending(attribute => attribute.IsCustomAttribute == true)
+            .ThenByDescending(attribute => attribute.IsPrimaryName == true)
+            .ThenBy(attribute => GetLabel(attribute.DisplayName, attribute.LogicalName), StringComparer.CurrentCultureIgnoreCase)
+            .ThenBy(attribute => attribute.LogicalName, StringComparer.OrdinalIgnoreCase)
+            .Select(attribute =>
+            {
+                var displayName = GetLabel(attribute.DisplayName, attribute.LogicalName);
+                var lookupTargets = attribute is LookupAttributeMetadata lookup
+                    ? (IReadOnlyList<string>)(lookup.Targets ?? [])
+                        .Where(target => !string.IsNullOrWhiteSpace(target))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .OrderBy(target => target, StringComparer.OrdinalIgnoreCase)
+                        .ToList()
+                    : [];
+                var dateTime = attribute as DateTimeAttributeMetadata;
+                return new TableDataExportColumn
+                {
+                    CsvHeader = displayNameCounts[displayName] == 1
+                        ? displayName
+                        : $"{displayName} ({attribute.LogicalName})",
+                    DisplayName = displayName,
+                    LogicalName = attribute.LogicalName,
+                    DataType = GetAttributeTypeName(attribute),
+                    RequiredLevel = attribute.RequiredLevel?.Value.ToString() ?? "None",
+                    IsPrimaryId = attribute.IsPrimaryId == true ||
+                                  string.Equals(attribute.LogicalName, table.PrimaryIdAttribute, StringComparison.OrdinalIgnoreCase),
+                    IsPrimaryName = attribute.IsPrimaryName == true,
+                    IsCustomAttribute = attribute.IsCustomAttribute == true,
+                    LookupTargets = lookupTargets,
+                    DateTimeFormat = dateTime?.Format?.ToString(),
+                    DateTimeBehavior = dateTime?.DateTimeBehavior?.Value,
+                };
+            })
+            .ToList();
+
+        if (columns.All(column => !column.IsPrimaryId))
+        {
+            throw new InvalidDataException(
+                $"Table '{table.LogicalName}' does not expose a readable Primary ID required for browser-compatible data export.");
+        }
+
+        return new TableDataExportDefinition
+        {
+            Table = table,
+            Columns = columns,
+            SkippedColumns = skippedColumns
+                .OrderBy(column => column.DisplayName, StringComparer.CurrentCultureIgnoreCase)
+                .ThenBy(column => column.LogicalName, StringComparer.OrdinalIgnoreCase)
+                .ToList(),
+        };
+    }
+
+    public async Task<TableDataExportPage> RetrieveTableDataExportPageAsync(
+        TableDataExportDefinition definition,
+        int pageNumber,
+        string? pagingCookie,
+        CancellationToken cancellationToken)
+    {
+        EnsureConnected();
+        ArgumentNullException.ThrowIfNull(definition);
+        if (pageNumber < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(pageNumber));
+        }
+
+        var query = new QueryExpression(definition.Table.LogicalName)
+        {
+            ColumnSet = new ColumnSet(definition.Columns.Select(column => column.LogicalName).ToArray()),
+            NoLock = true,
+            PageInfo = new PagingInfo
+            {
+                Count = 5000,
+                PageNumber = pageNumber,
+                PagingCookie = pagingCookie,
+                ReturnTotalRecordCount = false,
+            },
+        };
+        query.Orders.Add(new OrderExpression(definition.Table.PrimaryIdAttribute, OrderType.Ascending));
+        var page = await Task.Run(() => _client!.RetrieveMultiple(query), cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        var rows = page.Entities.Select(entity =>
+        {
+            var row = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            foreach (var column in definition.Columns)
+            {
+                entity.Attributes.TryGetValue(column.LogicalName, out var rawValue);
+                if (rawValue is null && column.IsPrimaryId)
+                {
+                    rawValue = entity.Id;
+                }
+
+                entity.FormattedValues.TryGetValue(column.LogicalName, out var formattedValue);
+                row[column.LogicalName] = FormatBrowserImportValue(rawValue, formattedValue, column);
+            }
+
+            return (IReadOnlyDictionary<string, string?>)row;
+        }).ToList();
+        return new TableDataExportPage
+        {
+            Rows = rows,
+            HasMoreRecords = page.MoreRecords,
+            NextPagingCookie = page.PagingCookie,
+        };
+    }
+
     public async Task<TableDataPage> RetrieveTableDataPageAsync(
         DataverseTableInfo table,
         int pageNumber,
@@ -421,6 +572,47 @@ public sealed class DataverseService : IDisposable
             byte[] bytes => $"[Binary: {bytes.Length:N0} bytes]",
             Guid guid => guid.ToString("D"),
             bool boolean => boolean ? "true" : "false",
+            IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
+            _ => value.ToString(),
+        };
+    }
+
+    public static string? FormatBrowserImportValue(
+        object? value,
+        string? formattedValue,
+        TableDataExportColumn column)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        if (value is AliasedValue aliased)
+        {
+            return FormatBrowserImportValue(aliased.Value, formattedValue, column);
+        }
+
+        return value switch
+        {
+            EntityReference reference => !string.IsNullOrWhiteSpace(formattedValue)
+                ? formattedValue
+                : !string.IsNullOrWhiteSpace(reference.Name)
+                    ? reference.Name
+                    : reference.Id.ToString("D"),
+            OptionSetValue option => !string.IsNullOrWhiteSpace(formattedValue)
+                ? formattedValue
+                : option.Value.ToString(CultureInfo.InvariantCulture),
+            OptionSetValueCollection options => !string.IsNullOrWhiteSpace(formattedValue)
+                ? formattedValue
+                : string.Join("; ", options.Select(option => option.Value.ToString(CultureInfo.InvariantCulture))),
+            bool boolean => !string.IsNullOrWhiteSpace(formattedValue)
+                ? formattedValue
+                : boolean ? "true" : "false",
+            Money money => money.Value.ToString(CultureInfo.InvariantCulture),
+            DateTime dateTime => FormatBrowserImportDateTime(dateTime, column),
+            DateTimeOffset dateTimeOffset => dateTimeOffset.ToString("O", CultureInfo.InvariantCulture),
+            Guid guid => guid.ToString("D"),
+            byte[] bytes => Convert.ToBase64String(bytes),
             IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
             _ => value.ToString(),
         };
@@ -575,6 +767,97 @@ public sealed class DataverseService : IDisposable
             IsCustom = metadata.IsCustomEntity == true && metadata.IsManaged != true,
             Metadata = metadata,
         };
+    }
+
+    private static string? GetBrowserImportUnsupportedReason(
+        AttributeMetadata attribute,
+        string primaryIdAttribute)
+    {
+        if (attribute.IsPrimaryId == true ||
+            string.Equals(attribute.LogicalName, primaryIdAttribute, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (attribute.IsValidForRead != true)
+        {
+            return "The column is not readable.";
+        }
+
+        if (BrowserImportUnsupportedSystemColumns.Contains(attribute.LogicalName))
+        {
+            return "Power Apps browser CSV import does not support this system field.";
+        }
+
+        if (!string.IsNullOrWhiteSpace(attribute.AttributeOf))
+        {
+            return "Dataverse generates this companion column from another column.";
+        }
+
+        if (attribute is FileAttributeMetadata ||
+            string.Equals(attribute.AttributeTypeName?.Value, "FileType", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Power Apps browser CSV import does not support File columns.";
+        }
+
+        if (attribute is ImageAttributeMetadata ||
+            string.Equals(attribute.AttributeTypeName?.Value, "ImageType", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Power Apps browser CSV import does not support Image columns.";
+        }
+
+        if (attribute is MultiSelectPicklistAttributeMetadata ||
+            string.Equals(attribute.AttributeTypeName?.Value, "MultiSelectPicklistType", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Power Apps browser CSV import does not support multi-select Choices columns.";
+        }
+
+        if (attribute is IntegerAttributeMetadata { Format: IntegerFormat.TimeZone })
+        {
+            return "Power Apps browser CSV import does not support Timezone columns.";
+        }
+
+        if (attribute.AttributeType is AttributeTypeCode.Virtual or
+            AttributeTypeCode.CalendarRules or
+            AttributeTypeCode.ManagedProperty or
+            AttributeTypeCode.PartyList or
+            AttributeTypeCode.EntityName)
+        {
+            return "The column type is not supported by browser CSV import.";
+        }
+
+        if (attribute.IsValidForCreate != true && attribute.IsValidForUpdate != true)
+        {
+            return "The column is calculated, generated, or otherwise read-only.";
+        }
+
+        return null;
+    }
+
+    private static string GetAttributeTypeName(AttributeMetadata attribute)
+    {
+        return attribute.AttributeTypeName?.Value ?? attribute.AttributeType?.ToString() ?? "Unknown";
+    }
+
+    private static string FormatBrowserImportDateTime(DateTime value, TableDataExportColumn column)
+    {
+        if (string.Equals(column.DateTimeFormat, DateTimeFormat.DateOnly.ToString(), StringComparison.OrdinalIgnoreCase))
+        {
+            return value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        }
+
+        if (string.Equals(column.DateTimeBehavior, DateTimeBehavior.UserLocal.Value, StringComparison.OrdinalIgnoreCase))
+        {
+            var utcValue = value.Kind switch
+            {
+                DateTimeKind.Utc => value,
+                DateTimeKind.Local => value.ToUniversalTime(),
+                _ => DateTime.SpecifyKind(value, DateTimeKind.Utc),
+            };
+            return utcValue.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
+        }
+
+        return value.ToString("yyyy-MM-dd'T'HH:mm:ss.fff", CultureInfo.InvariantCulture);
     }
 
     private static bool IsPreviewReadable(AttributeMetadata attribute)

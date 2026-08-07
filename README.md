@@ -1,6 +1,6 @@
 # Power Platform Solution Exporter
 
-A Windows Forms utility for publishing server-saved Power Platform customizations, incrementing an unmanaged solution revision, exporting the solution as an unmanaged ZIP, and inspecting its included Dataverse tables.
+A Windows Forms utility for publishing server-saved Power Platform customizations, incrementing an unmanaged solution revision, exporting the solution as an unmanaged ZIP, inspecting its included Dataverse tables, and exporting their data as browser-importable CSV files.
 
 The main window remains named `frmMain`, and all UI text is English. Snapshot restore and destructive table-data operations have been removed.
 
@@ -48,6 +48,22 @@ Click a header in **Columns and data types** to sort the column definitions asce
 
 Record cells remain selectable and copyable, and clipboard output contains only the selected cell values without column headers. The inspector never creates, updates, or deletes records.
 
+## Browser-importable table data export
+
+Choose **Export Table Data** to create a timestamped folder for every table listed in the selected Solution. This operation is read-only: it does not publish customizations, change the Solution version, or modify Dataverse records. The folder contains:
+
+- One UTF-8 BOM CSV file per table, including its Primary ID GUID and all readable/importable columns.
+- `manifest.json`, which maps every CSV header to its display name, logical name, data type, lookup targets, required level, and skipped-column reason.
+- `import-guide.txt`, which gives the browser import steps and a lookup-aware recommended table order.
+
+CSV headings use Dataverse display names for browser auto-mapping. If display names are duplicated within one table, the logical name is appended to make the headings unambiguous. Choice, Boolean, status, state, and lookup values use their Dataverse display values; numeric, money, GUID, and date/time values use stable invariant representations.
+
+Power Apps browser import doesn't support File, Image, multi-select Choices, Timezone, and specific system fields. The exporter also omits generated, calculated, unreadable, and otherwise read-only columns, and records every omission in the manifest. CSV import performs inserts/updates only: it doesn't delete target rows that aren't present in the CSV. If a table or column was deleted, import the unmanaged Solution ZIP before importing its CSV data.
+
+The exporter writes to a temporary folder and only exposes the final timestamped folder after every table, the manifest, and the guide finish successfully. Cancellation or failure removes the incomplete temporary export.
+
+The export contains only values readable by the signed-in account. CSV and manifest files are unencrypted and can contain sensitive business data, so the complete output folder must be stored securely.
+
 ## Saved connections
 
 Environment URL and user name are editable drop-down lists. Profiles are stored in:
@@ -82,6 +98,7 @@ dotnet test PowerPlatformSolutionExporter.slnx
 
 - **Publish All** can make saved customizations visible to users across the connected environment. The confirmation dialog names this scope explicitly.
 - The export button never imports a Solution and never modifies table records, but it does publish customizations and update the Solution version.
+- **Export Table Data** is read-only, but browser CSV import is not an exact database restore: it doesn't delete extra rows and requires careful Primary ID, Choice, and lookup mapping.
 - Exported unmanaged ZIPs can contain application source, plug-ins, flows, connection references, and environment-variable definitions. Store them as protected source artifacts.
 
 ## Microsoft references
@@ -93,3 +110,4 @@ dotnet test PowerPlatformSolutionExporter.slnx
 - [Solution versioning](https://learn.microsoft.com/en-us/power-apps/maker/data-platform/update-solutions)
 - [Dataverse AttributeMetadata](https://learn.microsoft.com/en-us/power-apps/developer/data-platform/webapi/reference/attributemetadata?view=dataverse-latest)
 - [AttributeMetadata.AttributeOf](https://learn.microsoft.com/en-us/dotnet/api/microsoft.xrm.sdk.metadata.attributemetadata.attributeof?view=dataverse-sdk-latest)
+- [Import data from Excel and export data to CSV](https://learn.microsoft.com/en-us/power-apps/maker/data-platform/data-platform-import-export)

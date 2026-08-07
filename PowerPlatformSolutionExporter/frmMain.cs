@@ -127,6 +127,70 @@ public partial class frmMain : Form
         }
     }
 
+    private async void btnExportTableData_Click(object? sender, EventArgs e)
+    {
+        if (_solutionOverview is null || _solutionOverview.Tables.Count == 0)
+        {
+            MessageBox.Show(
+                this,
+                "Select an unmanaged solution that contains tables first.",
+                "Tables Required",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(txtExportFolder.Text))
+        {
+            MessageBox.Show(this, "Choose an export folder.", "Folder Required", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        SaveExportFolderSetting(showError: true);
+        var overview = _solutionOverview;
+        var confirmation = MessageBox.Show(
+            this,
+            $"Export browser-importable table data as CSV files?\n\n" +
+            $"Solution: {overview.Solution.FriendlyName}\n" +
+            $"Tables: {overview.Tables.Count:N0}\n" +
+            $"Destination: {txtExportFolder.Text.Trim()}\n\n" +
+            "This is a data-only export. Each table is written to a separate UTF-8 CSV file. " +
+            "Unsupported browser-import fields are skipped and documented in manifest.json.\n\n" +
+            "CSV import inserts or updates records; it does not delete extra records from Dataverse.\n\n" +
+            "The exported CSV files are unencrypted and can contain sensitive table data. Store them securely.",
+            "Confirm Table Data Export",
+            MessageBoxButtons.YesNo,
+            MessageBoxIcon.Warning,
+            MessageBoxDefaultButton.Button2);
+        if (confirmation != DialogResult.Yes)
+        {
+            return;
+        }
+
+        await RunOperationAsync("Export table data", async cancellationToken =>
+        {
+            var result = await new TableDataExporter(_dataverseService).ExportAsync(
+                overview,
+                txtExportFolder.Text.Trim(),
+                CreateProgress(),
+                cancellationToken);
+            var dependencyWarning = result.DependencyCycleDetected
+                ? "\n\nA lookup dependency cycle was detected. Follow import-guide.txt and retry unresolved lookup rows after the first pass."
+                : string.Empty;
+            MessageBox.Show(
+                this,
+                $"Browser-importable table data exported successfully.\n\n" +
+                $"Tables: {result.TableCount:N0}\n" +
+                $"Records: {result.RecordCount:N0}\n" +
+                $"Skipped columns: {result.SkippedColumnCount:N0}\n\n" +
+                $"Review import-guide.txt and manifest.json before importing.\n\n" +
+                result.OutputFolder + dependencyWarning,
+                "Table Data Export Complete",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Information);
+        });
+    }
+
     private async void btnExport_Click(object? sender, EventArgs e)
     {
         if (cboSolutions.SelectedItem is not SolutionInfo solution)
@@ -435,6 +499,7 @@ public partial class frmMain : Form
         btnRefreshSolutions.Enabled = connected && !_busy;
         txtExportFolder.Enabled = !_busy;
         btnBrowseExportFolder.Enabled = !_busy;
+        btnExportTableData.Enabled = connected && !_busy && _solutionOverview?.Tables.Count > 0;
         btnExport.Enabled = connected && !_busy && IsCanvasPublishPreflightReady();
         dgvTables.Enabled = connected && !_busy;
         btnCancelOperation.Enabled = _busy;

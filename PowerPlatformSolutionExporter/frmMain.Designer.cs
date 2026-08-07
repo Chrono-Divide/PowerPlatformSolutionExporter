@@ -27,7 +27,9 @@ partial class frmMain
     private DataGridViewTextBoxColumn colType;
     private DataGridViewTextBoxColumn colPrimaryId;
     private DataGridViewTextBoxColumn colColumnCount;
+    private Panel pnlTableFooter;
     private Label lblTableSummary;
+    private Button btnExportTableData;
     private GroupBox grpExport;
     private TableLayoutPanel layoutExport;
     private Label lblSolution;
@@ -87,7 +89,9 @@ partial class frmMain
         colType = new DataGridViewTextBoxColumn();
         colPrimaryId = new DataGridViewTextBoxColumn();
         colColumnCount = new DataGridViewTextBoxColumn();
+        pnlTableFooter = new Panel();
         lblTableSummary = new Label();
+        btnExportTableData = new Button();
         grpExport = new GroupBox();
         layoutExport = new TableLayoutPanel();
         lblSolution = new Label();
@@ -121,6 +125,7 @@ partial class frmMain
         splitMain.SuspendLayout();
         grpTables.SuspendLayout();
         ((System.ComponentModel.ISupportInitialize)dgvTables).BeginInit();
+        pnlTableFooter.SuspendLayout();
         grpExport.SuspendLayout();
         layoutExport.SuspendLayout();
         grpLog.SuspendLayout();
@@ -234,7 +239,7 @@ partial class frmMain
         splitMain.TabStop = false;
         // grpTables
         grpTables.Controls.Add(dgvTables);
-        grpTables.Controls.Add(lblTableSummary);
+        grpTables.Controls.Add(pnlTableFooter);
         grpTables.Dock = DockStyle.Fill;
         grpTables.Text = "Tables in selected solution";
         // dgvTables
@@ -268,11 +273,28 @@ partial class frmMain
         colColumnCount.DataPropertyName = "ColumnCount";
         colColumnCount.FillWeight = 45F;
         colColumnCount.HeaderText = "Columns";
-        lblTableSummary.Dock = DockStyle.Bottom;
+        // pnlTableFooter
+        pnlTableFooter.Controls.Add(lblTableSummary);
+        pnlTableFooter.Controls.Add(btnExportTableData);
+        pnlTableFooter.Dock = DockStyle.Bottom;
+        pnlTableFooter.Height = 38;
+        pnlTableFooter.Padding = new Padding(5, 4, 5, 4);
+        // lblTableSummary
+        lblTableSummary.Dock = DockStyle.Fill;
         lblTableSummary.ForeColor = Color.DimGray;
-        lblTableSummary.Height = 30;
-        lblTableSummary.Padding = new Padding(5, 7, 0, 0);
+        lblTableSummary.Padding = new Padding(0, 7, 0, 0);
         lblTableSummary.Text = "0 tables";
+        // btnExportTableData
+        btnExportTableData.BackColor = Color.FromArgb(41, 98, 160);
+        btnExportTableData.Dock = DockStyle.Right;
+        btnExportTableData.FlatStyle = FlatStyle.Flat;
+        btnExportTableData.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+        btnExportTableData.ForeColor = Color.White;
+        btnExportTableData.Name = "btnExportTableData";
+        btnExportTableData.Text = "Export Table Data";
+        btnExportTableData.UseVisualStyleBackColor = false;
+        btnExportTableData.Width = 178;
+        btnExportTableData.Click += btnExportTableData_Click;
         // grpExport
         grpExport.Controls.Add(layoutExport);
         grpExport.Dock = DockStyle.Fill;
@@ -421,6 +443,7 @@ partial class frmMain
         splitMain.ResumeLayout(false);
         grpTables.ResumeLayout(false);
         ((System.ComponentModel.ISupportInitialize)dgvTables).EndInit();
+        pnlTableFooter.ResumeLayout(false);
         grpExport.ResumeLayout(false);
         layoutExport.ResumeLayout(false);
         layoutExport.PerformLayout();
