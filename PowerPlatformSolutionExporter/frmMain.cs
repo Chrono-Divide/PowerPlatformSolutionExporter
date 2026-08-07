@@ -129,11 +129,27 @@ public partial class frmMain : Form
 
     private async void btnExportTableData_Click(object? sender, EventArgs e)
     {
+        dgvTables.EndEdit();
         if (_solutionOverview is null || _solutionOverview.Tables.Count == 0)
         {
             MessageBox.Show(
                 this,
                 "Select an unmanaged solution that contains tables first.",
+                "Tables Required",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+            return;
+        }
+
+        var selectedTables = _tableRows
+            .Where(row => row.IncludeInDataExport)
+            .Select(row => row.Table)
+            .ToList();
+        if (selectedTables.Count == 0)
+        {
+            MessageBox.Show(
+                this,
+                "Select at least one table using the Export data checkboxes.",
                 "Tables Required",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning);
@@ -147,12 +163,19 @@ public partial class frmMain : Form
         }
 
         SaveExportFolderSetting(showError: true);
-        var overview = _solutionOverview;
+        var sourceOverview = _solutionOverview;
+        var overview = new SolutionOverview
+        {
+            Solution = sourceOverview.Solution,
+            Tables = selectedTables,
+            ComponentCounts = sourceOverview.ComponentCounts,
+            CanvasApps = sourceOverview.CanvasApps,
+        };
         var confirmation = MessageBox.Show(
             this,
             $"Export browser-importable table data as CSV files?\n\n" +
             $"Solution: {overview.Solution.FriendlyName}\n" +
-            $"Tables: {overview.Tables.Count:N0}\n" +
+            $"Selected tables: {overview.Tables.Count:N0}\n" +
             $"Destination: {txtExportFolder.Text.Trim()}\n\n" +
             "This is a data-only export. Each table is written to a separate UTF-8 CSV file. " +
             "Unsupported browser-import fields are skipped and documented in manifest.json.\n\n" +
@@ -214,6 +237,8 @@ public partial class frmMain : Form
             $"Solution: {solution.FriendlyName}\n" +
             $"Unique name: {solution.UniqueName}\n" +
             $"Version: {solution.Version} -> {nextVersion}\n\n" +
+            "Table checkboxes affect only Export Table Data; they do not limit this Solution ZIP. " +
+            "The ZIP exports the full selected Solution as it is currently configured. A segmented table still contains only the table assets included in the Solution.\n\n" +
             "This publishes ALL saved customizations in the connected environment, not only this solution. " +
             "Saved Canvas App drafts in this solution must already be published or export will be blocked.\n\n" +
             "Unsaved edits still open in Power Apps Studio cannot be detected or saved by this tool.",
@@ -250,13 +275,35 @@ public partial class frmMain : Form
 
     private void dgvTables_CellDoubleClick(object? sender, DataGridViewCellEventArgs e)
     {
-        if (_busy || e.RowIndex < 0 || dgvTables.Rows[e.RowIndex].DataBoundItem is not TableGridRow row)
+        if (_busy ||
+            e.RowIndex < 0 ||
+            e.ColumnIndex == colExportData.Index ||
+            dgvTables.Rows[e.RowIndex].DataBoundItem is not TableGridRow row)
         {
             return;
         }
 
         using var viewer = new frmTableViewer(_dataverseService, row.Table);
         viewer.ShowDialog(this);
+    }
+
+    private void dgvTables_CurrentCellDirtyStateChanged(object? sender, EventArgs e)
+    {
+        if (dgvTables.IsCurrentCellDirty && dgvTables.CurrentCell?.ColumnIndex == colExportData.Index)
+        {
+            dgvTables.CommitEdit(DataGridViewDataErrorContexts.Commit);
+        }
+    }
+
+    private void dgvTables_CellValueChanged(object? sender, DataGridViewCellEventArgs e)
+    {
+        if (e.RowIndex < 0 || e.ColumnIndex != colExportData.Index)
+        {
+            return;
+        }
+
+        UpdateTableSummary();
+        UpdateActionState();
     }
 
     private void btnCancelOperation_Click(object? sender, EventArgs e)
@@ -339,7 +386,7 @@ public partial class frmMain : Form
         txtNextVersion.Text = SolutionVersion.IncrementRevision(solution.Version);
         txtPublisher.Text = solution.PublisherName;
         lblComponentSummary.Text = BuildComponentSummary(_solutionOverview);
-        lblTableSummary.Text = $"{_solutionOverview.Tables.Count:N0} tables. Double-click a table to inspect column types and record data.";
+        UpdateTableSummary();
         UpdateActionState();
     }
 
@@ -374,7 +421,7 @@ public partial class frmMain : Form
         txtNextVersion.Clear();
         txtPublisher.Clear();
         lblComponentSummary.Text = "Select an unmanaged solution to inspect its components.";
-        lblTableSummary.Text = "0 tables";
+        UpdateTableSummary();
     }
 
     private void LoadConnectionProfiles(ConnectionProfile? selectProfile = null)
@@ -499,7 +546,7 @@ public partial class frmMain : Form
         btnRefreshSolutions.Enabled = connected && !_busy;
         txtExportFolder.Enabled = !_busy;
         btnBrowseExportFolder.Enabled = !_busy;
-        btnExportTableData.Enabled = connected && !_busy && _solutionOverview?.Tables.Count > 0;
+        btnExportTableData.Enabled = connected && !_busy && _tableRows.Any(row => row.IncludeInDataExport);
         btnExport.Enabled = connected && !_busy && IsCanvasPublishPreflightReady();
         dgvTables.Enabled = connected && !_busy;
         btnCancelOperation.Enabled = _busy;
@@ -526,6 +573,12 @@ public partial class frmMain : Form
         return version is null
             ? "0.0.0"
             : $"{version.Major}.{version.Minor}.{version.Build}";
+    }
+
+    private void UpdateTableSummary()
+    {
+        var selectedCount = _tableRows.Count(row => row.IncludeInDataExport);
+        lblTableSummary.Text = $"{_tableRows.Count:N0} tables | {selectedCount:N0} selected for data export. Double-click a table to inspect.";
     }
 
     private bool IsCanvasPublishPreflightReady()
@@ -591,6 +644,7 @@ public partial class frmMain : Form
         }
 
         public DataverseTableInfo Table { get; }
+        public bool IncludeInDataExport { get; set; } = true;
         public string DisplayName => Table.DisplayName;
         public string LogicalName => Table.LogicalName;
         public string Type => Table.IsCustom ? "Custom" : "Standard";

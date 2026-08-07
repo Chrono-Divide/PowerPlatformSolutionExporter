@@ -8,6 +8,8 @@ The main window remains named `frmMain`, and all UI text is English. Snapshot re
 
 Select an unmanaged Solution from the connected environment and choose **Publish & Export Unmanaged ZIP**. After explicit confirmation, the application performs this sequence:
 
+The table-grid checkboxes do not limit this operation. The ZIP always represents the complete selected Solution as it is currently configured. However, Dataverse supports segmented tables: if a table was added to that Solution with only selected objects, the export contains only those selected table assets. To carry every column, relationship, form, view, and other table asset, configure that table with **Include all objects** in the Solution before exporting.
+
 1. Run a read-only Canvas App preflight by comparing each included app's `lastmodifiedtime` with `lastpublishtime`. A known draft or incomplete verification blocks the operation before Publish All or any other mutation.
 2. Execute Dataverse `PublishAllXmlRequest`. This publishes all saved customizations in the connected environment, not only the selected Solution.
 3. Reload and verify the Canvas App components again to catch a concurrent save or incomplete publish.
@@ -50,7 +52,7 @@ Record cells remain selectable and copyable, and clipboard output contains only 
 
 ## Browser-importable table data export
 
-Choose **Export Table Data** to create a timestamped folder for every table listed in the selected Solution. This operation is read-only: it does not publish customizations, change the Solution version, or modify Dataverse records. The folder contains:
+Use the **Export data** checkbox on each table, then choose **Export Table Data** to create a timestamped folder for the selected tables. Every table is checked by default. These checkboxes affect only the CSV data export and never limit **Publish & Export Unmanaged ZIP**. This operation is read-only: it does not publish customizations, change the Solution version, or modify Dataverse records. The folder contains:
 
 - One UTF-8 BOM CSV file per table, including its Primary ID GUID and all readable/importable columns.
 - `manifest.json`, which maps every CSV header to its display name, logical name, data type, lookup targets, required level, and skipped-column reason.
@@ -104,6 +106,7 @@ dotnet test PowerPlatformSolutionExporter.slnx
 ## Microsoft references
 
 - [Export solutions](https://learn.microsoft.com/en-us/power-apps/maker/data-platform/export-solutions)
+- [Use segmented solutions](https://learn.microsoft.com/en-us/power-platform/alm/segmented-solutions-alm)
 - [PublishAllXmlRequest](https://learn.microsoft.com/en-us/dotnet/api/microsoft.crm.sdk.messages.publishallxmlrequest?view=dataverse-sdk-latest)
 - [Canvas App table and publish timestamps](https://learn.microsoft.com/en-us/power-apps/developer/data-platform/reference/entities/canvasapp)
 - [Save and publish a Canvas App](https://learn.microsoft.com/en-us/power-apps/maker/canvas-apps/save-publish-app)

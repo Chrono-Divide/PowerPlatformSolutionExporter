@@ -15,8 +15,8 @@ public sealed class MainFormTests
         {
             using var form = new frmMain();
             Assert.Equal("frmMain", form.Name);
-            Assert.Equal(new Version(0, 0, 3, 0), typeof(frmMain).Assembly.GetName().Version);
-            Assert.Equal("Power Platform Solution Exporter v0.0.3", form.Text);
+            Assert.Equal(new Version(0, 0, 4, 0), typeof(frmMain).Assembly.GetName().Version);
+            Assert.Equal("Power Platform Solution Exporter v0.0.4", form.Text);
 
             var environmentList = FindControl<ComboBox>(form, "cboEnvironmentUrl");
             var userNameList = FindControl<ComboBox>(form, "cboUserName");
@@ -27,7 +27,19 @@ public sealed class MainFormTests
             Assert.NotNull(FindControl<ComboBox>(form, "cboSolutions"));
             Assert.NotNull(FindControl<Button>(form, "btnExport"));
             Assert.Equal("Export Table Data", FindControl<Button>(form, "btnExportTableData").Text);
-            Assert.NotNull(FindControl<DataGridView>(form, "dgvTables"));
+            var tableGrid = FindControl<DataGridView>(form, "dgvTables");
+            Assert.False(tableGrid.ReadOnly);
+            var exportDataColumn = Assert.IsType<DataGridViewCheckBoxColumn>(tableGrid.Columns["colExportData"]);
+            Assert.Equal("IncludeInDataExport", exportDataColumn.DataPropertyName);
+            Assert.False(exportDataColumn.ReadOnly);
+            Assert.All(
+                tableGrid.Columns.Cast<DataGridViewColumn>().Where(column => column != exportDataColumn),
+                column => Assert.True(column.ReadOnly));
+
+            var publishNotice = FindControl<Label>(form, "lblPublishNotice");
+            Assert.Contains("Table checkboxes affect only Export Table Data", publishNotice.Text, StringComparison.Ordinal);
+            Assert.Contains("full selected Solution", publishNotice.Text, StringComparison.Ordinal);
+            Assert.Contains("segmented", publishNotice.Text, StringComparison.OrdinalIgnoreCase);
 
             var allText = EnumerateControls(form)
                 .Select(control => control.Text)

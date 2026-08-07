@@ -22,6 +22,7 @@ partial class frmMain
     private SplitContainer splitMain;
     private GroupBox grpTables;
     private DataGridView dgvTables;
+    private DataGridViewCheckBoxColumn colExportData;
     private DataGridViewTextBoxColumn colDisplayName;
     private DataGridViewTextBoxColumn colLogicalName;
     private DataGridViewTextBoxColumn colType;
@@ -84,6 +85,7 @@ partial class frmMain
         splitMain = new SplitContainer();
         grpTables = new GroupBox();
         dgvTables = new DataGridView();
+        colExportData = new DataGridViewCheckBoxColumn();
         colDisplayName = new DataGridViewTextBoxColumn();
         colLogicalName = new DataGridViewTextBoxColumn();
         colType = new DataGridViewTextBoxColumn();
@@ -250,29 +252,47 @@ partial class frmMain
         dgvTables.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
         dgvTables.BackgroundColor = Color.White;
         dgvTables.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-        dgvTables.Columns.AddRange(colDisplayName, colLogicalName, colType, colPrimaryId, colColumnCount);
+        dgvTables.Columns.AddRange(colExportData, colDisplayName, colLogicalName, colType, colPrimaryId, colColumnCount);
         dgvTables.Dock = DockStyle.Fill;
+        dgvTables.EditMode = DataGridViewEditMode.EditOnEnter;
         dgvTables.MultiSelect = false;
         dgvTables.Name = "dgvTables";
-        dgvTables.ReadOnly = true;
+        dgvTables.ReadOnly = false;
         dgvTables.RowHeadersVisible = false;
         dgvTables.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
         dgvTables.CellDoubleClick += dgvTables_CellDoubleClick;
+        dgvTables.CellValueChanged += dgvTables_CellValueChanged;
+        dgvTables.CurrentCellDirtyStateChanged += dgvTables_CurrentCellDirtyStateChanged;
+        colExportData.AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
+        colExportData.DataPropertyName = "IncludeInDataExport";
+        colExportData.HeaderText = "Export data";
+        colExportData.Name = "colExportData";
+        colExportData.Resizable = DataGridViewTriState.False;
+        colExportData.SortMode = DataGridViewColumnSortMode.NotSortable;
+        colExportData.ThreeState = false;
+        colExportData.Width = 78;
+        colExportData.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+        colExportData.HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleCenter;
         colDisplayName.DataPropertyName = "DisplayName";
         colDisplayName.FillWeight = 130F;
         colDisplayName.HeaderText = "Display name";
+        colDisplayName.ReadOnly = true;
         colLogicalName.DataPropertyName = "LogicalName";
         colLogicalName.FillWeight = 125F;
         colLogicalName.HeaderText = "Logical name";
+        colLogicalName.ReadOnly = true;
         colType.DataPropertyName = "Type";
         colType.FillWeight = 55F;
         colType.HeaderText = "Type";
+        colType.ReadOnly = true;
         colPrimaryId.DataPropertyName = "PrimaryId";
         colPrimaryId.FillWeight = 110F;
         colPrimaryId.HeaderText = "Primary ID";
+        colPrimaryId.ReadOnly = true;
         colColumnCount.DataPropertyName = "ColumnCount";
         colColumnCount.FillWeight = 45F;
         colColumnCount.HeaderText = "Columns";
+        colColumnCount.ReadOnly = true;
         // pnlTableFooter
         pnlTableFooter.Controls.Add(lblTableSummary);
         pnlTableFooter.Controls.Add(btnExportTableData);
@@ -298,7 +318,7 @@ partial class frmMain
         // grpExport
         grpExport.Controls.Add(layoutExport);
         grpExport.Dock = DockStyle.Fill;
-        grpExport.Text = "Publish and export unmanaged solution";
+        grpExport.Text = "Publish and export full selected solution";
         // layoutExport
         layoutExport.ColumnCount = 3;
         layoutExport.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 118F));
@@ -381,7 +401,8 @@ partial class frmMain
         lblComponentSummary.Text = "Select an unmanaged solution to inspect its components.";
         lblPublishNotice.Dock = DockStyle.Fill;
         lblPublishNotice.ForeColor = Color.DarkOrange;
-        lblPublishNotice.Text = "Before export, the tool publishes all server-saved customizations, verifies Canvas App publish timestamps, increments the revision, exports unmanaged, and validates the ZIP. Unsaved browser edits cannot be detected.";
+        lblPublishNotice.Name = "lblPublishNotice";
+        lblPublishNotice.Text = "Table checkboxes affect only Export Table Data. This button always exports the full selected Solution as currently configured. A table added with selected objects remains segmented; use Include all objects in Power Apps when every table asset is required. Before export, the tool publishes all server-saved customizations, verifies Canvas App publish timestamps, increments the revision, exports unmanaged, and validates the ZIP. Unsaved browser edits cannot be detected.";
         btnExport.Anchor = AnchorStyles.Left | AnchorStyles.Right;
         btnExport.BackColor = Color.FromArgb(34, 126, 79);
         btnExport.FlatStyle = FlatStyle.Flat;
