@@ -13,6 +13,9 @@ public sealed class TableDataExportColumn
     public IReadOnlyList<string> LookupTargets { get; init; } = [];
     public string? DateTimeFormat { get; init; }
     public string? DateTimeBehavior { get; init; }
+    public string? LookupTargetEntity { get; init; }
+    public string? LookupTargetPrimaryId { get; init; }
+    public string? LookupKeyAttribute { get; init; }
 }
 
 public sealed class SkippedTableDataExportColumn

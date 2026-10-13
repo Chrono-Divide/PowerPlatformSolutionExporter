@@ -50,17 +50,21 @@ Click a header in **Columns and data types** to sort the column definitions asce
 
 Record cells remain selectable and copyable, and clipboard output contains only the selected cell values without column headers. The inspector never creates, updates, or deletes records.
 
-## Browser-importable table data export
+## Table data export in Web UI CSV format
 
 Use the **Export data** checkbox on each table, then choose **Export Table Data** to create a timestamped folder for the selected tables. Every table is checked by default. The three-state **Select all** checkbox switches between all and none and shows an indeterminate state when only some rows are selected. These checkboxes affect only the CSV data export and never limit **Publish & Export Unmanaged ZIP**. This operation is read-only: it does not publish customizations, change the Solution version, or modify Dataverse records. The folder contains:
 
-- One UTF-8 BOM CSV file per table, including its Primary ID GUID and all readable/importable columns.
+- One UTF-8 BOM CSV file per table, named after the Dataverse entity set (the same plural file name used by Web UI), including its Primary ID GUID and the Web UI export column scope.
 - `manifest.json`, which maps every CSV header to its display name, logical name, data type, lookup targets, required level, and skipped-column reason.
 - `import-guide.txt`, which gives the browser import steps and a lookup-aware recommended table order.
 
-CSV headings use Dataverse display names for browser auto-mapping. If display names are duplicated within one table, the logical name is appended to make the headings unambiguous. Choice, Boolean, status, state, and lookup values use their Dataverse display values; numeric, money, GUID, and date/time values use stable invariant representations.
+CSV headings use logical names, matching **Power Apps > Tables > Export > Export data**. Choice, state and status values are numeric codes, Boolean values are `True`/`False` regardless of their configured display labels, money/decimal values have no unnecessary trailing zeros, and timestamps use `yyyy-MM-dd HH:mm:ss.fffffff`. Display labels are never substituted for raw values.
 
-Power Apps browser import doesn't support File, Image, multi-select Choices, Timezone, and specific system fields. The exporter also omits generated, calculated, unreadable, and otherwise read-only columns, and records every omission in the manifest. CSV import performs inserts/updates only: it doesn't delete target rows that aren't present in the CSV. If a table or column was deleted, import the unmanaged Solution ZIP before importing its CSV data.
+For a lookup whose target has an active alternate key, the CSV contains `lookup.keyattribute` columns with the referenced key values, including every attribute in a composite key. Other lookups contain the referenced GUID. The manifest records the original lookup attribute, projected key attribute and target tables. CSV fields are quoted and UTF-8 BOM is preserved. Record order, column order and line-ending serialization can differ from Web UI; column names, column scope and cell strings are the comparison contract.
+
+Power Apps browser CSV export doesn't support File, Image, multi-select Choices, Timezone, and specific system fields. The exporter excludes unreadable and logical/companion columns but **keeps stored read-only columns**, including `versionnumber`, `owningbusinessunit`, `exchangerate` and base-currency amounts, as Web UI does. Every omitted column and reason is recorded in the manifest. CSV import performs inserts/updates only: it doesn't delete target rows that aren't present in the CSV. If a table or column was deleted, import the unmanaged Solution ZIP before importing its CSV data.
+
+Manifest format version 2 identifies this raw Web UI CSV contract. Previously exported version 1 folders use display labels and a narrower column scope; they are not changed by upgrading the application.
 
 The exporter writes to a temporary folder and only exposes the final timestamped folder after every table, the manifest, and the guide finish successfully. Cancellation or failure removes the incomplete temporary export.
 
@@ -95,6 +99,17 @@ The first launch uses `%UserProfile%\Documents\PowerPlatformSolutionExports` as 
 dotnet build PowerPlatformSolutionExporter.slnx
 dotnet test PowerPlatformSolutionExporter.slnx
 ```
+
+### Compare with a real Web UI export
+
+Download reference ZIPs using **Tables > Export > Export data** in the same environment. The read-only verifier uses the application's existing sign-in cache and its actual production export code; it never publishes, imports or changes the Solution version:
+
+```powershell
+dotnet run --project tools/CsvParityVerifier -- --environment https://YOUR_ORG.crm.dynamics.com --solution YOUR_SOLUTION --output C:\CsvVerification
+python tools/CsvParityVerifier/compare_csv.py --export-dir C:\CsvVerification\EXPORTED_FOLDER --web-ui C:\Downloads\WEB_UI_EXPORT.zip --report C:\CsvVerification\parity-report.json
+```
+
+Repeat `--web-ui` for multiple downloaded ZIPs. The comparison requires exact column names and scope, identical Primary ID sets and identical raw strings in every cell. It does not normalize date, money, Boolean or lookup values. Only record/column order and CSV quoting/record terminators are ignored. The report states reference coverage explicitly; use `--require-all-tables` to require references for every exported table. Reports contain counts, column names and hashes without record values. Keep exported CSVs and Web UI ZIPs outside Git; the local `artifacts/` directory is ignored.
 
 ## Safety notes
 

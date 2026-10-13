@@ -26,8 +26,8 @@ public sealed class TableDataExporterTests
             Table = parentTable,
             Columns =
             [
-                Column("Parent", "Parent", "new_parentid", "UniqueidentifierType", isPrimaryId: true),
-                Column("Name", "Name", "new_name", "StringType"),
+                Column("new_parentid", "Parent", "new_parentid", "UniqueidentifierType", isPrimaryId: true),
+                Column("new_name", "Name", "new_name", "StringType"),
             ],
             SkippedColumns =
             [
@@ -45,10 +45,10 @@ public sealed class TableDataExporterTests
             Table = childTable,
             Columns =
             [
-                Column("Child", "Child", "new_childid", "UniqueidentifierType", isPrimaryId: true),
-                Column("Parent", "Parent", "new_parentid", "LookupType", lookupTargets: ["new_parent"]),
-                Column("External account", "External account", "new_accountid", "LookupType", lookupTargets: ["account"]),
-                Column("Notes", "Notes", "new_notes", "MemoType"),
+                Column("new_childid", "Child", "new_childid", "UniqueidentifierType", isPrimaryId: true),
+                Column("new_parentid.new_code", "Parent", "new_parentid", "LookupType", lookupTargets: ["new_parent"]),
+                Column("new_accountid", "External account", "new_accountid", "LookupType", lookupTargets: ["account"]),
+                Column("new_notes", "Notes", "new_notes", "MemoType"),
             ],
             SkippedColumns = [],
         };
@@ -65,7 +65,7 @@ public sealed class TableDataExporterTests
                 [("new_child", 1)] = Page(
                     [Row(
                         ("new_childid", childId.ToString("D")),
-                        ("new_parentid", "Alpha"),
+                        ("new_parentid.new_code", "Alpha"),
                         ("new_accountid", "External"),
                         ("new_notes", "Child note"))]),
             });
@@ -87,17 +87,17 @@ public sealed class TableDataExporterTests
             Assert.True(Directory.Exists(result.OutputFolder));
             Assert.Empty(Directory.GetDirectories(exportRoot, "*.partial_*"));
 
-            var parentCsvPath = Path.Combine(result.OutputFolder, "new_parent.csv");
+            var parentCsvPath = Path.Combine(result.OutputFolder, "new_parents.csv");
             var parentBytes = File.ReadAllBytes(parentCsvPath);
             Assert.True(parentBytes.Length >= 3);
             Assert.Equal([0xEF, 0xBB, 0xBF], parentBytes.Take(3));
             var parentCsv = File.ReadAllText(parentCsvPath);
-            Assert.StartsWith("Parent,Name", parentCsv, StringComparison.Ordinal);
+            Assert.StartsWith("\"new_parentid\",\"new_name\"", parentCsv, StringComparison.Ordinal);
             Assert.Contains("\"Alpha, \"\"quoted\"\"\r\nsecond line\"", parentCsv, StringComparison.Ordinal);
 
             using var manifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(result.OutputFolder, "manifest.json")));
             var root = manifest.RootElement;
-            Assert.Equal(1, root.GetProperty("formatVersion").GetInt32());
+            Assert.Equal(2, root.GetProperty("formatVersion").GetInt32());
             Assert.Equal(3, root.GetProperty("recordCount").GetInt64());
             var tables = root.GetProperty("tables").EnumerateArray().ToList();
             Assert.Equal("new_parent", tables[0].GetProperty("logicalName").GetString());
@@ -108,8 +108,8 @@ public sealed class TableDataExporterTests
 
             var guide = File.ReadAllText(Path.Combine(result.OutputFolder, "import-guide.txt"));
             Assert.Contains("BROWSER IMPORT STEPS", guide, StringComparison.Ordinal);
-            Assert.Contains("new_parent.csv", guide, StringComparison.Ordinal);
-            Assert.Contains("new_child.csv", guide, StringComparison.Ordinal);
+            Assert.Contains("new_parents.csv", guide, StringComparison.Ordinal);
+            Assert.Contains("new_childs.csv", guide, StringComparison.Ordinal);
         }
         finally
         {
@@ -206,8 +206,8 @@ public sealed class TableDataExporterTests
 
             Assert.True(result.DependencyCycleDetected);
             Assert.Equal(2, result.TableCount);
-            Assert.True(File.Exists(Path.Combine(result.OutputFolder, "new_a.csv")));
-            Assert.True(File.Exists(Path.Combine(result.OutputFolder, "new_b.csv")));
+            Assert.True(File.Exists(Path.Combine(result.OutputFolder, "new_as.csv")));
+            Assert.True(File.Exists(Path.Combine(result.OutputFolder, "new_bs.csv")));
             Assert.Contains(
                 "lookup dependency cycle was detected",
                 File.ReadAllText(Path.Combine(result.OutputFolder, "import-guide.txt")),
@@ -269,7 +269,7 @@ public sealed class TableDataExporterTests
             SchemaName = logicalName,
             PrimaryIdAttribute = primaryId,
             IsCustom = true,
-            Metadata = new EntityMetadata { LogicalName = logicalName, SchemaName = logicalName },
+            Metadata = new EntityMetadata { LogicalName = logicalName, SchemaName = logicalName, EntitySetName = logicalName + "s" },
         };
     }
 

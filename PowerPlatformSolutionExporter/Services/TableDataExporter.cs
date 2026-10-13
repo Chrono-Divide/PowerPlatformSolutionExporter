@@ -6,7 +6,7 @@ namespace PowerPlatformSolutionExporter.Services;
 
 public sealed class TableDataExporter
 {
-    private const int ManifestFormatVersion = 1;
+    private const int ManifestFormatVersion = 2;
     private static readonly UTF8Encoding CsvEncoding = new(encoderShouldEmitUTF8Identifier: true);
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -56,7 +56,7 @@ public sealed class TableDataExporter
                 cancellationToken.ThrowIfCancellationRequested();
                 var logicalName = importPlan.OrderedLogicalNames[index];
                 var definition = definitions[logicalName];
-                var fileName = $"{SanitizePathSegment(logicalName)}.csv";
+                var fileName = $"{SanitizePathSegment(definition.Table.Metadata.EntitySetName ?? logicalName)}.csv";
                 var filePath = Path.Combine(workingFolder, fileName);
                 progress?.Report(
                     $"Exporting table {index + 1:N0}/{importPlan.OrderedLogicalNames.Count:N0}: " +
@@ -129,6 +129,7 @@ public sealed class TableDataExporter
         CancellationToken cancellationToken)
     {
         await using var writer = new StreamWriter(filePath, append: false, CsvEncoding);
+        writer.NewLine = "\r\n";
         await writer.WriteLineAsync(string.Join(",", definition.Columns.Select(column => EscapeCsv(column.CsvHeader))));
 
         long recordCount = 0;
@@ -146,7 +147,7 @@ public sealed class TableDataExporter
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var line = string.Join(",", definition.Columns.Select(column =>
-                    EscapeCsv(row.TryGetValue(column.LogicalName, out var value) ? value : null)));
+                    EscapeCsv(row.TryGetValue(column.CsvHeader, out var value) ? value : null)));
                 await writer.WriteLineAsync(line);
                 recordCount++;
             }
@@ -270,6 +271,7 @@ public sealed class TableDataExporter
                 LookupTargets = column.LookupTargets,
                 DateTimeFormat = column.DateTimeFormat,
                 DateTimeBehavior = column.DateTimeBehavior,
+                LookupKeyAttribute = column.LookupKeyAttribute,
             }).ToList(),
             SkippedColumns = definition.SkippedColumns.Select(column => new SkippedColumnManifest
             {
@@ -296,8 +298,9 @@ public sealed class TableDataExporter
         builder.AppendLine("- These CSV files contain data only. If a table or column is missing, import the unmanaged solution ZIP first.");
         builder.AppendLine("- Browser CSV import inserts or updates rows; it does not delete rows that are absent from a CSV file.");
         builder.AppendLine("- Map the Primary ID GUID when you want existing rows to be updated instead of duplicated.");
-        builder.AppendLine("- Lookup values use their Dataverse display value. Verify lookup mapping and import referenced tables first.");
-        builder.AppendLine("- File, Image, multi-select Choices, Timezone, generated/read-only columns, and unsupported system fields are omitted.");
+        builder.AppendLine("- CSV uses Power Apps Web UI logical headers and raw values: numeric choice/status codes, True/False, GUIDs, and unlocalized timestamps.");
+        builder.AppendLine("- Lookups to a table with an active alternate key use lookup.key columns, as in Web UI. Other lookups retain their GUIDs. Import referenced tables first.");
+        builder.AppendLine("- Read-only stored columns are included to match Web UI. File, Image, multi-select Choices, Timezone, logical/companion columns, and unsupported system fields are omitted.");
         builder.AppendLine("- Only values readable by the signed-in Dataverse account can be exported.");
         builder.AppendLine("- CSV and manifest files are unencrypted and can contain sensitive data. Store the entire folder securely.");
         builder.AppendLine("- Review manifest.json for exact logical names, data types, lookup targets, and every skipped column.");
@@ -336,14 +339,7 @@ public sealed class TableDataExporter
 
     internal static string EscapeCsv(string? value)
     {
-        if (string.IsNullOrEmpty(value))
-        {
-            return string.Empty;
-        }
-
-        return value.IndexOfAny([',', '"', '\r', '\n']) < 0
-            ? value
-            : $"\"{value.Replace("\"", "\"\"")}\"";
+        return $"\"{(value ?? string.Empty).Replace("\"", "\"\"")}\"";
     }
 
     private static string GetAvailableDirectoryPath(string parentFolder, string folderStem)
@@ -437,6 +433,7 @@ public sealed class TableDataExporter
         public required IReadOnlyList<string> LookupTargets { get; init; }
         public string? DateTimeFormat { get; init; }
         public string? DateTimeBehavior { get; init; }
+        public string? LookupKeyAttribute { get; init; }
     }
 
     private sealed class SkippedColumnManifest

@@ -10,7 +10,7 @@ namespace PowerPlatformSolutionExporter.Tests;
 public sealed class TableDataExportDefinitionTests
 {
     [Fact]
-    public void DefinitionKeepsImportableColumnsAndDocumentsUnsupportedColumns()
+    public void DefinitionMatchesWebUiScopeInsteadOfFilteringByWritePrivileges()
     {
         var primaryId = new UniqueIdentifierAttributeMetadata
         {
@@ -124,10 +124,10 @@ public sealed class TableDataExportDefinitionTests
         var definition = service.GetTableDataExportDefinition(table);
 
         Assert.Equal(
-            ["new_sampleid", "new_name", "new_alias", "new_parentid"],
+            ["new_sampleid", "new_alias", "new_calculated", "new_name", "new_parentid"],
             definition.Columns.Select(column => column.LogicalName));
-        Assert.Equal("Name (new_alias)", definition.Columns.Single(column => column.LogicalName == "new_alias").CsvHeader);
-        Assert.Equal("Name (new_name)", definition.Columns.Single(column => column.LogicalName == "new_name").CsvHeader);
+        Assert.Equal("new_alias", definition.Columns.Single(column => column.LogicalName == "new_alias").CsvHeader);
+        Assert.Equal("new_name", definition.Columns.Single(column => column.LogicalName == "new_name").CsvHeader);
         Assert.Equal(
             ["new_parent"],
             definition.Columns.Single(column => column.LogicalName == "new_parentid").LookupTargets);
@@ -135,53 +135,84 @@ public sealed class TableDataExportDefinitionTests
         Assert.Contains(definition.SkippedColumns, column => column.LogicalName == "new_file" && column.Reason.Contains("File"));
         Assert.Contains(definition.SkippedColumns, column => column.LogicalName == "new_choices" && column.Reason.Contains("multi-select"));
         Assert.Contains(definition.SkippedColumns, column => column.LogicalName == "new_timezone" && column.Reason.Contains("Timezone"));
-        Assert.Contains(definition.SkippedColumns, column => column.LogicalName == "new_calculated" && column.Reason.Contains("read-only"));
+        Assert.Contains(definition.Columns, column => column.LogicalName == "new_calculated");
     }
 
     [Fact]
-    public void BrowserImportValuesUseLabelsAndStableInvariantRepresentations()
+    public void RawValuesMatchCapturedWebUiFormatsRegardlessOfDisplayLabels()
     {
-        var defaultColumn = Column("StringType");
-        var userLocalDate = Column("DateTimeType", dateTimeBehavior: DateTimeBehavior.UserLocal.Value);
-        var dateOnly = Column("DateTimeType", dateTimeFormat: DateTimeFormat.DateOnly.ToString());
         var lookupId = Guid.Parse("44444444-4444-4444-4444-444444444444");
-
-        Assert.Equal("Active", DataverseService.FormatBrowserImportValue(new OptionSetValue(1), "Active", defaultColumn));
-        Assert.Equal("Yes", DataverseService.FormatBrowserImportValue(true, "Yes", defaultColumn));
-        Assert.Equal("Parent", DataverseService.FormatBrowserImportValue(
-            new EntityReference("new_parent", lookupId) { Name = "Parent" },
-            "Parent",
-            defaultColumn));
-        Assert.Equal("12.34", DataverseService.FormatBrowserImportValue(new Money(12.34m), "$12.34", defaultColumn));
+        Assert.Equal("1", WebUiCsvContract.FormatValue(new OptionSetValue(1)));
+        Assert.Equal("True", WebUiCsvContract.FormatValue(true));
+        Assert.Equal("False", WebUiCsvContract.FormatValue(false));
+        Assert.Equal(lookupId.ToString("D"), WebUiCsvContract.FormatValue(new EntityReference("new_parent", lookupId) { Name = "Parent" }));
+        Assert.Equal("12.34", WebUiCsvContract.FormatValue(new Money(12.3400000000m)));
+        Assert.Equal("0", WebUiCsvContract.FormatValue(new Money(0.0000000000m)));
+        Assert.Equal("1", WebUiCsvContract.FormatValue(1.0000000000m));
         Assert.Equal(
-            "2026-08-07T01:02:03.000Z",
-            DataverseService.FormatBrowserImportValue(
-                new DateTime(2026, 8, 7, 1, 2, 3, DateTimeKind.Utc),
-                formattedValue: null,
-                userLocalDate));
+            "2026-08-07 01:02:03.0000000",
+            WebUiCsvContract.FormatValue(new DateTime(2026, 8, 7, 1, 2, 3, DateTimeKind.Utc)));
         Assert.Equal(
-            "2026-08-07",
-            DataverseService.FormatBrowserImportValue(
-                new DateTime(2026, 8, 7),
-                formattedValue: null,
-                dateOnly));
+            "2026-08-07 00:00:00.0000000",
+            WebUiCsvContract.FormatValue(new DateTime(2026, 8, 7)));
+        Assert.Equal("2026-08-07 00:00:00.1234567", WebUiCsvContract.FormatValue(new DateTime(2026, 8, 7).AddTicks(1234567)));
+        Assert.Null(WebUiCsvContract.FormatValue(null));
+        Assert.Equal("line 1, \"quoted\"\r\nline 2", WebUiCsvContract.FormatValue("line 1, \"quoted\"\r\nline 2"));
     }
 
-    private static TableDataExportColumn Column(
-        string dataType,
-        string? dateTimeFormat = null,
-        string? dateTimeBehavior = null)
+    [Fact]
+    public void LookupUsesActiveAlternateKeyAttributesNotDisplayNameOrGuid()
     {
-        return new TableDataExportColumn
+        var id = new UniqueIdentifierAttributeMetadata { LogicalName = "new_childid" };
+        SetAttributeFlags(id, true, false, false, false);
+        var lookup = new LookupAttributeMetadata { LogicalName = "new_parentid" };
+        SetAttributeFlags(lookup, true, true, true, true);
+        SetMetadataProperty(lookup, nameof(LookupAttributeMetadata.Targets), new[] { "new_parent" });
+        var code = new StringAttributeMetadata { LogicalName = "new_code" };
+        var region = new IntegerAttributeMetadata { LogicalName = "new_region" };
+        SetAttributeFlags(code, true, true, true, true);
+        SetAttributeFlags(region, true, true, true, true);
+        var key = new EntityKeyMetadata { LogicalName = "new_business_key", KeyAttributes = ["new_code", "new_region"] };
+        SetMetadataProperty(key, nameof(EntityKeyMetadata.EntityKeyIndexStatus), EntityKeyIndexStatus.Active);
+        var parent = new EntityMetadata { LogicalName = "new_parent" };
+        SetMetadataProperty(parent, nameof(EntityMetadata.PrimaryIdAttribute), "new_parentid");
+        SetMetadataProperty(parent, nameof(EntityMetadata.Attributes), new AttributeMetadata[] { code, region });
+        SetMetadataProperty(parent, nameof(EntityMetadata.Keys), new[] { key });
+        var child = new EntityMetadata { LogicalName = "new_child" };
+        SetMetadataProperty(child, nameof(EntityMetadata.Attributes), new AttributeMetadata[] { id, lookup });
+        var table = new DataverseTableInfo
         {
-            CsvHeader = "Value",
-            DisplayName = "Value",
-            LogicalName = "new_value",
-            DataType = dataType,
-            RequiredLevel = "None",
-            DateTimeFormat = dateTimeFormat,
-            DateTimeBehavior = dateTimeBehavior,
+            LogicalName = "new_child", SchemaName = "new_Child", DisplayName = "Child",
+            PrimaryIdAttribute = "new_childid", Metadata = child,
         };
+        var definition = WebUiCsvContract.CreateDefinition(table, new Dictionary<string, EntityMetadata> { ["new_parent"] = parent });
+        Assert.Equal(["new_childid", "new_parentid.new_code", "new_parentid.new_region"], definition.Columns.Select(column => column.CsvHeader));
+        Assert.Equal(["StringType", "IntegerType"], definition.Columns.Skip(1).Select(column => column.DataType));
+        Assert.All(definition.Columns.Skip(1), column => Assert.Equal("new_parentid", column.LogicalName));
+
+        SetMetadataProperty(key, nameof(EntityKeyMetadata.EntityKeyIndexStatus), EntityKeyIndexStatus.Failed);
+        definition = WebUiCsvContract.CreateDefinition(table, new Dictionary<string, EntityMetadata> { ["new_parent"] = parent });
+        Assert.Equal(["new_childid", "new_parentid"], definition.Columns.Select(column => column.CsvHeader));
+    }
+
+    [Fact]
+    public void StoredReadonlyColumnsAreExportedWhileLogicalCompanionsAreExcluded()
+    {
+        var names = new[] { "new_sampleid", "versionnumber", "owningbusinessunit", "new_amount_base", "exchangerate", "owninguser", "new_valuename" };
+        var attributes = names.Select(name => new StringAttributeMetadata { LogicalName = name }).ToArray();
+        foreach (var attribute in attributes) SetAttributeFlags(attribute, true, false, false, false);
+        SetMetadataProperty(attributes[5], nameof(AttributeMetadata.IsLogical), true);
+        SetMetadataProperty(attributes[6], nameof(AttributeMetadata.AttributeOf), "new_value");
+        var metadata = new EntityMetadata { LogicalName = "new_sample" };
+        SetMetadataProperty(metadata, nameof(EntityMetadata.Attributes), attributes);
+        var table = new DataverseTableInfo
+        {
+            LogicalName = "new_sample", SchemaName = "new_Sample", DisplayName = "Sample",
+            PrimaryIdAttribute = "new_sampleid", Metadata = metadata,
+        };
+        var definition = WebUiCsvContract.CreateDefinition(table, new Dictionary<string, EntityMetadata>());
+        Assert.Equal(["new_sampleid", "exchangerate", "new_amount_base", "owningbusinessunit", "versionnumber"], definition.Columns.Select(column => column.CsvHeader));
+        Assert.Equal(["new_valuename", "owninguser"], definition.SkippedColumns.Select(column => column.LogicalName));
     }
 
     private static void SetAttributeFlags(

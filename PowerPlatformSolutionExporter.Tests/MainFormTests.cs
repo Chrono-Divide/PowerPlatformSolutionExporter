@@ -17,8 +17,8 @@ public sealed class MainFormTests
         {
             using var form = new frmMain();
             Assert.Equal("frmMain", form.Name);
-            Assert.Equal(new Version(0, 0, 5, 0), typeof(frmMain).Assembly.GetName().Version);
-            Assert.Equal("Power Platform Solution Exporter v0.0.5", form.Text);
+            Assert.Equal(new Version(0, 0, 6, 0), typeof(frmMain).Assembly.GetName().Version);
+            Assert.Equal("Power Platform Solution Exporter v0.0.6", form.Text);
 
             var environmentList = FindControl<ComboBox>(form, "cboEnvironmentUrl");
             var userNameList = FindControl<ComboBox>(form, "cboUserName");

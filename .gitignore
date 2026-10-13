@@ -29,3 +29,6 @@ packages/
 DataverseSnapshots/
 PowerPlatformSolutionExports/
 *_unmanaged_*.zip
+
+# Local builds and live CSV verification data (never commit environment records)
+artifacts/

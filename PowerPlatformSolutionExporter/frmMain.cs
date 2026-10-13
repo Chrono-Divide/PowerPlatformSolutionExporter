@@ -174,12 +174,13 @@ public partial class frmMain : Form
         };
         var confirmation = MessageBox.Show(
             this,
-            $"Export browser-importable table data as CSV files?\n\n" +
+            $"Export table data as Power Apps Web UI-format CSV files?\n\n" +
             $"Solution: {overview.Solution.FriendlyName}\n" +
             $"Selected tables: {overview.Tables.Count:N0}\n" +
             $"Destination: {txtExportFolder.Text.Trim()}\n\n" +
             "This is a data-only export. Each table is written to a separate UTF-8 CSV file. " +
-            "Unsupported browser-import fields are skipped and documented in manifest.json.\n\n" +
+            "CSV files use logical column names and raw values, including the stored read-only columns exported by Web UI. " +
+            "Unsupported export fields are skipped and documented in manifest.json.\n\n" +
             "CSV import inserts or updates records; it does not delete extra records from Dataverse.\n\n" +
             "The exported CSV files are unencrypted and can contain sensitive table data. Store them securely.",
             "Confirm Table Data Export",
@@ -203,7 +204,7 @@ public partial class frmMain : Form
                 : string.Empty;
             MessageBox.Show(
                 this,
-                $"Browser-importable table data exported successfully.\n\n" +
+                $"Table data exported in Power Apps Web UI CSV format.\n\n" +
                 $"Tables: {result.TableCount:N0}\n" +
                 $"Records: {result.RecordCount:N0}\n" +
                 $"Skipped columns: {result.SkippedColumnCount:N0}\n\n" +

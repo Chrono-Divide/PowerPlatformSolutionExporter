@@ -1,4 +1,5 @@
 <Solution>
   <Project Path="PowerPlatformSolutionExporter/PowerPlatformSolutionExporter.csproj" />
   <Project Path="PowerPlatformSolutionExporter.Tests/PowerPlatformSolutionExporter.Tests.csproj" />
+  <Project Path="tools/CsvParityVerifier/CsvParityVerifier.csproj" />
 </Solution>
